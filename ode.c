@@ -162,31 +162,16 @@ static void copy_double_array(double *out, const double *in, size_t n) {
   tolerance, the user just calls the code again.  A restart is neither
   required nor desirable.
 */
-int step(double *const restrict x,
-         double *const restrict y,
+int step(double *const restrict y,
          const fn_type f,
          void *const restrict f_ctx,
          const size_t neqn,
-         double *const restrict h,
          double *const restrict eps,
          double *const restrict wt,
-         bool *const restrict start,
-         double *const restrict hold,
-         unsigned *const restrict k,
-         unsigned *const restrict kold,
          double *const restrict phi,
          double *const restrict p,
          double *const restrict yp,
-         double *const restrict psi,
-         double *const restrict alpha,
-         double *const restrict beta,
-         double *const restrict sig,
-         double *const restrict v,
-         double *const restrict w,
-         double *const restrict g,
-         bool *const restrict phase1,
-         unsigned *const restrict ns,
-         bool *const restrict nornd)
+         struct Ode *const self)
 {
     static const double gstr[13] = {
         0.5, 0.0833, 0.0417, 0.0264, 0.0188, 0.0143, 0.0114,
@@ -194,6 +179,22 @@ int step(double *const restrict x,
     };
 
     const double p5eps = *eps * 0.5;
+    bool *const start = &self->start;
+    bool *const phase1 = &self->phase1;
+    bool *const nornd = &self->nornd;
+    unsigned *const k = &self->k;
+    unsigned *const kold = &self->kold;
+    unsigned *const ns = &self->ns;
+    double *const x = &self->x;
+    double *const h = &self->h;
+    double *const hold = &self->hold;
+    double *const psi = self->psi;
+    double *const alpha = self->alpha;
+    double *const beta = self->beta;
+    double *const sig = self->sig;
+    double *const v = self->v;
+    double *const w = self->w;
+    double *const g = self->g;
 
     size_t l;
     unsigned knew;
@@ -561,18 +562,18 @@ int step(double *const restrict x,
   The remaining parameters are returned unaltered from their input values.
   Integration with `step` may be continued.
 */
-void intrp(double *const restrict x,
-           double *const restrict y,
+void intrp(const double x,
+           const double *const restrict y,
            const double xout,
            double *const restrict yout,
            double *const restrict ypout,
            const size_t neqn,
-           unsigned *const restrict kold,
-           double *const restrict phi,
-           double *const restrict psi)
+           const unsigned kold,
+           const double *const restrict phi,
+           const double *const restrict psi)
 {
-    const double hi = xout - *x;
-    const unsigned ki = (unsigned)(*kold + 1);
+    const double hi = xout - x;
+    const unsigned ki = (unsigned)(kold + 1);
 
     size_t l;
     unsigned i, j;
@@ -581,7 +582,7 @@ void intrp(double *const restrict x,
     double rho[13] = {1.0};
     double w[13] = {0.0};
 
-    if (*kold >= 13) {
+    if (kold >= 13) {
         fprintf(stderr, "invalid kold\n");
         fflush(stderr);
         abort();
@@ -644,25 +645,7 @@ void de(const fn_type f,
         double *const restrict yp,
         double *const restrict ypout,
         double *const restrict phi,
-        double *const restrict alpha,
-        double *const restrict beta,
-        double *const restrict sig,
-        double *const restrict v,
-        double *const restrict w,
-        double *const restrict g,
-        bool *const restrict phase1,
-        double *const restrict psi,
-        double *const restrict x,
-        double *const restrict h,
-        double *const restrict hold,
-        bool *const restrict start,
-        double *const restrict told,
-        double *const restrict delsgn,
-        unsigned *const restrict ns,
-        bool *const restrict nornd,
-        unsigned *const restrict k,
-        unsigned *const restrict kold,
-        int *const restrict isnold,
+        struct Ode *const self,
         const int maxnum)
 {
     const int isn = *iflag >= 0 ? 1 : -1;
@@ -681,7 +664,7 @@ void de(const fn_type f,
     if (neqn < 1 || *t == tout ||
         *relerr < 0.0 || *abserr < 0.0 ||
         eps <= 0.0 || *iflag == 0 ||
-        (*iflag != 1 && (*t != *told || *iflag < 2 || *iflag > 5))) {
+        (*iflag != 1 && (*t != self->told || *iflag < 2 || *iflag > 5))) {
         *iflag = 6;
         return;
     }
@@ -693,41 +676,44 @@ void de(const fn_type f,
     stiff = false;
     releps = *relerr / eps;
     abseps = *abserr / eps;
-    if (*iflag == 1 || *isnold < 0 || *delsgn * del <= 0.0) {
+    if (*iflag == 1 || self->isnold < 0 || self->delsgn * del <= 0.0) {
         /* on start and restart also set work variables x and yy, store the
            direction of integration and initialize the step size */
-        *start = true;
-        *x = *t;
+        self->start = true;
+        self->x = *t;
         copy_double_array(yy, y, (size_t)neqn);
-        *delsgn = copysign(1.0, del);
-        *h = copysign(max(fabs(tout - *x), 4.0 * DBL_EPSILON * fabs(*x)),
-                      tout - *x);
+        self->delsgn = copysign(1.0, del);
+        self->h = copysign(max(fabs(tout - self->x),
+                               4.0 * DBL_EPSILON * fabs(self->x)),
+                           tout - self->x);
     }
 
     /* if already past output point, interpolate and return */
     for (nostep = 0;; ++nostep) {
 
-        if (fabs(*x - *t) >= absdel) {
-            intrp(x, yy, tout, y, ypout, neqn, kold, phi, psi);
+        if (fabs(self->x - *t) >= absdel) {
+            intrp(self->x, yy, tout, y, ypout, neqn,
+                  self->kold, phi, self->psi);
             *iflag = 2;
             *t = tout;
-            *told = *t;
-            *isnold = isn;
+            self->told = *t;
+            self->isnold = isn;
             return;
         }
 
         /* if cannot go past output point and sufficiently close, extrapolate and
            return */
-        if (isn <= 0 || fabs(tout - *x) < 4.0 * DBL_EPSILON * fabs(*x)) {
-            *h = tout - *x;
-            (*f)(f_ctx, *x, yy, yp);
+        if (isn <= 0 ||
+            fabs(tout - self->x) < 4.0 * DBL_EPSILON * fabs(self->x)) {
+            self->h = tout - self->x;
+            (*f)(f_ctx, self->x, yy, yp);
             for (l = 0; l < neqn; ++l) {
-                y[l] = yy[l] + *h * yp[l];
+                y[l] = yy[l] + self->h * yp[l];
             }
             *iflag = 2;
             *t = tout;
-            *told = *t;
-            *isnold = isn;
+            self->told = *t;
+            self->isnold = isn;
             return;
         }
 
@@ -738,35 +724,33 @@ void de(const fn_type f,
                 *iflag = isn * 5;
             }
             copy_double_array(y, yy, (size_t)neqn);
-            *t = *x;
-            *told = *t;
-            *isnold = 1;
+            *t = self->x;
+            self->told = *t;
+            self->isnold = 1;
             return;
         }
 
         /* limit step size, set weight vector and take a step */
-        *h = copysign(min(fabs(*h), fabs(tend - *x)), *h);
+        self->h = copysign(min(fabs(self->h), fabs(tend - self->x)), self->h);
         for (l = 0; l < neqn; ++l) {
             wt[l] = releps * fabs(yy[l]) + abseps;
         }
 
         /* test for tolerances too small */
-        if (step(x, yy, f, f_ctx, neqn, h, &eps, wt, start, hold,
-                 k, kold, phi, p, yp, psi, alpha, beta,
-                 sig, v, w, g, phase1, ns, nornd)) {
+        if (step(yy, f, f_ctx, neqn, &eps, wt, phi, p, yp, self)) {
             *iflag = isn * 3;
             *relerr = eps * releps;
             *abserr = eps * abseps;
             copy_double_array(y, yy, (size_t)neqn);
-            *t = *x;
-            *told = *t;
-            *isnold = 1;
+            *t = self->x;
+            self->told = *t;
+            self->isnold = 1;
             return;
         }
 
         /* augment counter on number of steps and test for stiffness */
         ++kle4;
-        if (*kold > 4) {
+        if (self->kold > 4) {
             kle4 = 0;
         }
         if (kle4 >= 50) {
@@ -835,7 +819,7 @@ void de(const fn_type f,
 
   @param work
   Arrays to hold information internal to `de` which is necessary for
-  subsequent calls (length: `100 + 21 * neqn`)
+  subsequent calls (length: `21 * neqn`)
 
   @param iwork
   Arrays to hold information internal to `de` which is necessary for
@@ -910,51 +894,15 @@ void ode(const fn_type f,
          double *const restrict abserr,
          int *const restrict iflag,
          double *const restrict work,
-         struct Iwork *const iwork,
+         struct Ode *const self,
          const int maxnum)
 {
-    static const size_t ialpha = 0;
-    static const size_t ih = 88;
-    static const size_t ihold = 89;
-    static const size_t istart = 90;
-    static const size_t itold = 91;
-    static const size_t idelsn = 92;
-    static const size_t ibeta = 12;
-    static const size_t isig = 24;
-    static const size_t iv = 37;
-    static const size_t iw = 49;
-    static const size_t ig = 61;
-    static const size_t iphase = 74;
-    static const size_t ipsi = 75;
-    static const size_t ix = 87;
-    static const size_t iyy = 99;
-
-    const size_t iwt = iyy + neqn;
+    const size_t iwt = neqn;
     const size_t ip = iwt + neqn;
     const size_t iyp = ip + neqn;
     const size_t iypout = iyp + neqn;
     const size_t iphi = iypout + neqn;
-
-    bool phase1, start;
-
-    if (abs(*iflag) != 1) {
-        start = work[istart] > 0.;
-        phase1 = work[iphase] > 0.;
-    }
     de(f, f_ctx, neqn, y, t, tout, relerr, abserr, iflag,
-       &work[iyy], &work[iwt], &work[ip], &work[iyp], &work[iypout],
-       &work[iphi], &work[ialpha], &work[ibeta], &work[isig], &work[iv],
-       &work[iw], &work[ig], &phase1, &work[ipsi], &work[ix], &work[ih],
-       &work[ihold], &start, &work[itold], &work[idelsn], &iwork->ns,
-       &iwork->nornd, &iwork->k, &iwork->kold, &iwork->isnold, maxnum);
-    if (start) {
-        work[istart] = 1.0;
-    } else {
-        work[istart] = -1.0;
-    }
-    if (phase1) {
-        work[iphase] = 1.0;
-    } else {
-        work[iphase] = -1.0;
-    }
+       &work[0], &work[iwt], &work[ip], &work[iyp], &work[iypout],
+       &work[iphi], self, maxnum);
 }
