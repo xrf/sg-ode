@@ -311,19 +311,15 @@ int step(double *const restrict x,
                     v[iq] -= temp5 * v[iq + 1];
                     w[iq] = v[iq];
                 }
-                g[nsp1 - 1] = w[0];
+                g[*ns] = w[0];
             }
 
             /* compute the g in the work vector w */
-            if (kp1 >= *ns + 2) {
-                for (i = *ns + 2; i <= kp1; ++i) {
-                    const int limit2 = kp2 - i;
-                    const double temp6 = alpha[i - 2];
-                    for (iq = 1; iq <= limit2; ++iq) {
-                        w[iq - 1] -= temp6 * w[iq];
-                    }
-                    g[i - 1] = w[0];
+            for (i = *ns; i < *k; ++i) {
+                for (iq = 0; iq < *k - i; ++iq) {
+                    w[iq] -= alpha[i] * w[iq + 1];
                 }
+                g[i + 1] = w[0];
             }
         }
         /**** end block 1 ****/
@@ -334,37 +330,32 @@ int step(double *const restrict x,
            k-1, k-2 as if constant step size were used. */
 
         /* change phi to phi star */
-        if (*k >= nsp1) {
-            for (i = nsp1; i <= *k; ++i) {
-                for (l = 1; l <= neqn; ++l) {
-                    phi[l - 1 + (i - 1) * neqn] = beta[i - 1] * phi[l - 1 + (i - 1) * neqn];
-                }
+        for (i = *ns; i < *k; ++i) {
+            for (l = 0; l < neqn; ++l) {
+                phi[l + i * neqn] = beta[i] * phi[l + i * neqn];
             }
         }
         /* predict solution and differences */
-        for (l = 1; l <= neqn; ++l) {
-            phi[l - 1 + (kp2 - 1) * neqn] = phi[l - 1 + (kp1 - 1) * neqn];
-            phi[l - 1 + (kp1 - 1) * neqn] = 0.;
-            p[l - 1] = 0.;
+        for (l = 0; l < neqn; ++l) {
+            phi[l + kp1 * neqn] = phi[l + *k * neqn];
+            phi[l + *k * neqn] = 0.;
         }
-        for (j = 1; j <= *k; ++j) {
-            const int i = kp1 - j;
-            const int ip1 = i + 1;
-            const double temp2 = g[i - 1];
-            for (l = 1; l <= neqn; ++l) {
-                p[l - 1] += temp2 * phi[l - 1 + (i - 1) * neqn];
-                phi[l - 1 + (i - 1) * neqn] += phi[l - 1 + (ip1 - 1) * neqn];
+        clear_double_array(p, (size_t)neqn);
+        for (i = *k; i-- > 0;) {
+            for (l = 0; l < neqn; ++l) {
+                p[l] += g[i] * phi[l + i * neqn];
+                phi[l + i * neqn] += phi[l + (i + 1) * neqn];
             }
         }
         if (!*nornd) {
-            for (l = 1; l <= neqn; ++l) {
-                const double tau = *h * p[l - 1] - phi[l - 1 + neqn * 14];
-                p[l - 1] = y[l - 1] + tau;
-                phi[l - 1 + neqn * 15] = p[l - 1] - y[l - 1] - tau;
+            for (l = 0; l < neqn; ++l) {
+                const double tau = *h * p[l] - phi[l + neqn * 14];
+                p[l] = y[l] + tau;
+                phi[l + neqn * 15] = p[l] - y[l] - tau;
             }
         } else {
-            for (l = 1; l <= neqn; ++l) {
-                p[l - 1] = y[l - 1] + *h * p[l - 1];
+            for (l = 0; l < neqn; ++l) {
+                p[l] = y[l] + *h * p[l];
             }
         }
         {
@@ -377,26 +368,26 @@ int step(double *const restrict x,
             erkm2 = 0.;
             erkm1 = 0.;
             erk = 0.;
-            for (l = 1; l <= neqn; ++l) {
-                const double temp3 = 1. / wt[l - 1];
-                const double temp4 = yp[l - 1] - phi[l - 1];
+            for (l = 0; l < neqn; ++l) {
+                const double iwt = 1. / wt[l];
+                const double ypmphi = yp[l] - phi[l];
                 if (km2 > 0) {
-                    erkm2 += pow((phi[l - 1 + (km1 - 1) * neqn] + temp4) * temp3, 2.0);
+                    erkm2 += pow((phi[l + km2 * neqn] + ypmphi) * iwt, 2.0);
                 }
                 if (km2 >= 0) {
-                    erkm1 += pow((phi[l - 1 + (*k - 1) * neqn] + temp4) * temp3, 2.0);
+                    erkm1 += pow((phi[l + km1 * neqn] + ypmphi) * iwt, 2.0);
                 }
-                erk += pow(temp4 * temp3, 2.0);
+                erk += pow(ypmphi * iwt, 2.0);
             }
             if (km2 > 0) {
-                erkm2 = absh * sig[km1 - 1] * gstr[km2 - 1] * sqrt(erkm2);
+                erkm2 = absh * sig[km2] * gstr[km2 - 1] * sqrt(erkm2);
             }
             if (km2 >= 0) {
-                erkm1 = absh * sig[*k - 1] * gstr[km1 - 1] * sqrt(erkm1);
+                erkm1 = absh * sig[km1] * gstr[km2] * sqrt(erkm1);
             }
             const double temp5 = absh * sqrt(erk);
-            err = temp5 * (g[*k - 1] - g[kp1 - 1]);
-            erk = temp5 * sig[kp1 - 1] * gstr[*k - 1];
+            err = temp5 * (g[km1] - g[*k]);
+            erk = temp5 * sig[*k] * gstr[km1];
             knew = *k;
 
             /* test if order should be lowered */
@@ -427,19 +418,15 @@ int step(double *const restrict x,
             *phase1 = false;
             *x = xold;
         }
-        for (i = 1; i <= *k; ++i) {
-            const int ip1 = i + 1;
-            for (l = 1; l <= neqn; ++l) {
-                phi[l - 1 + (i - 1) * neqn] =
-                    (1.0 / beta[i - 1]) *
-                    (phi[l - 1 + (i - 1) * neqn] - phi[l - 1 + (ip1 - 1) * neqn]);
+        for (i = 0; i < *k; ++i) {
+            for (l = 0; l < neqn; ++l) {
+                phi[l + i * neqn] =
+                    (1.0 / beta[i]) *
+                    (phi[l + i * neqn] - phi[l + (i + 1) * neqn]);
             }
         }
-        if (*k >= 2) {
-            int i;
-            for (i = 2; i <= *k; ++i) {
-                psi[i - 2] = psi[i - 1] - *h;
-            }
+        for (i = 1; i < *k; ++i) {
+            psi[i - 1] = psi[i] - *h;
         }
         /* on third failure, set order to one.  thereafter, use optimal step
            size */
@@ -471,31 +458,31 @@ int step(double *const restrict x,
     *hold = *h;
 
     /* correct and evaluate */
-    temp1 = *h * g[kp1 - 1];
-    if (!*nornd) {
-        for (l = 1; l <= neqn; ++l) {
-            const double rho =
-                temp1 * (yp[l - 1] - phi[l - 1]) -
-                phi[l - 1 + neqn * 15];
-            y[l - 1] = p[l - 1] + rho;
-            phi[l - 1 + neqn * 14] = y[l - 1] - p[l - 1] - rho;
-        }
-    } else {
-        for (l = 1; l <= neqn; ++l) {
-            y[l - 1] = p[l - 1] + temp1 * (yp[l - 1] - phi[l - 1]);
+    {
+        const double hgk = *h * g[*k];
+        if (!*nornd) {
+            for (l = 0; l < neqn; ++l) {
+                const double rho = hgk * (yp[l] - phi[l]) - phi[l + neqn * 15];
+                y[l] = p[l] + rho;
+                phi[l + neqn * 14] = y[l] - p[l] - rho;
+            }
+        } else {
+            for (l = 0; l < neqn; ++l) {
+                y[l] = p[l] + hgk * (yp[l] - phi[l]);
+            }
         }
     }
     (*f)(f_ctx, *x, y, yp);
 
     /* update differences for next step */
 
-    for (l = 1; l <= neqn; ++l) {
-        phi[l - 1 + (kp1 - 1) * neqn] = yp[l - 1] - phi[l - 1];
-        phi[l - 1 + (kp2 - 1) * neqn] = phi[l - 1 + (kp1 - 1) * neqn] - phi[l - 1 + (kp2 - 1) * neqn];
+    for (l = 0; l < neqn; ++l) {
+        phi[l + *k * neqn] = yp[l] - phi[l];
+        phi[l + kp1 * neqn] = phi[l + *k * neqn] - phi[l + kp1 * neqn];
     }
-    for (i = 1; i <= *k; ++i) {
-        for (l = 1; l <= neqn; ++l) {
-            phi[l - 1 + (i - 1) * neqn] += phi[l - 1 + (kp1 - 1) * neqn];
+    for (i = 0; i < *k; ++i) {
+        for (l = 0; l < neqn; ++l) {
+            phi[l + i * neqn] += phi[l + *k * neqn];
         }
     }
 
