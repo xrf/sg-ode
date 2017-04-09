@@ -187,13 +187,13 @@ int step(double *const restrict x,
          bool *const restrict nornd)
 {
     static const double gstr[13] = {
-        .5, .0833, .0417, .0264, .0188, .0143, .0114,
-        .00936, .00789, .00679, .00592, .00524, .00468
+        0.5, 0.0833, 0.0417, 0.0264, 0.0188, 0.0143, 0.0114,
+        0.00936, 0.00789, 0.00679, 0.00592, 0.00524, 0.00468
     };
 
-    const double p5eps = *eps * .5;
+    const double p5eps = *eps * 0.5;
 
-    int i, ifail, iq, j, km1, km2, knew, kp1, kp2, l;
+    int i, ifail, iq, j, km1, km2, knew, kp1, l;
     double absh, erk, erkm1, erkm2, erkp1, err, hnew, round, temp1;
 
     /**** begin block 0 ****/
@@ -214,11 +214,11 @@ int step(double *const restrict x,
     }
     round = 2.0 * DBL_EPSILON * sqrt(round);
     if (p5eps < round) {
-        *eps = round * 2.f * (4.0 * DBL_EPSILON + 1.);
+        *eps = round * 2.f * (4.0 * DBL_EPSILON + 1.0);
         return 1;
     }
     g[0] = 1.;
-    g[1] = .5;
+    g[1] = 0.5;
     sig[0] = 1.;
     if (*start) {
         /* initialize.  compute appropriate step size for first step */
@@ -232,8 +232,8 @@ int step(double *const restrict x,
             }
             sum = sqrt(sum);
             absh = fabs(*h);
-            if (*eps < sum * 16. * pow(*h, 2.0)) {
-                absh = sqrt(*eps / sum) * .25;
+            if (*eps < sum * 16.0 * pow(*h, 2.0)) {
+                absh = sqrt(*eps / sum) * 0.25;
             }
         }
         *h = copysign(max(absh, 4.0 * DBL_EPSILON * fabs(*x)), *h);
@@ -243,7 +243,7 @@ int step(double *const restrict x,
         *start = false;
         *phase1 = true;
         *nornd = true;
-        if (p5eps <= round * 100.) {
+        if (p5eps <= round * 100.0) {
             *nornd = false;
             clear_double_array(&phi[neqn * 14], (size_t)neqn);
         }
@@ -255,10 +255,7 @@ int step(double *const restrict x,
     /* compute coefficients of formulas for this step.  avoid computing */
     /* those quantities not changed when step size is not changed. */
     while (1) {
-        int nsp1; /* single assignment */
-
         kp1 = *k + 1;
-        kp2 = *k + 2;
         km1 = *k - 1;
         km2 = *k - 2;
 
@@ -270,14 +267,13 @@ int step(double *const restrict x,
         if (*ns <= *kold) {
             ++*ns;
         }
-        nsp1 = *ns + 1;
         if (*k >= *ns) {
             temp1 = *h * *ns;
             /* compute those components of alpha, beta, psi, sig which are
                changed */
             beta[*ns - 1] = 1.0;
             alpha[*ns - 1] = 1.0 / *ns;
-            sig[nsp1 - 1] = 1.0;
+            sig[*ns] = 1.0;
             for (i = *ns; i < *k; ++i) {
                 const double psiim1 = psi[i - 1];
                 psi[i - 1] = temp1;
@@ -369,7 +365,7 @@ int step(double *const restrict x,
             erkm1 = 0.;
             erk = 0.;
             for (l = 0; l < neqn; ++l) {
-                const double iwt = 1. / wt[l];
+                const double iwt = 1.0 / wt[l];
                 const double ypmphi = yp[l] - phi[l];
                 if (km2 > 0) {
                     erkm2 += pow((phi[l + km2 * neqn] + ypmphi) * iwt, 2.0);
@@ -392,7 +388,7 @@ int step(double *const restrict x,
 
             /* test if order should be lowered */
             if (km2 == 0) {
-                if (erkm1 <= erk * .5) {
+                if (erkm1 <= erk * 0.5) {
                     knew = km1;
                 }
             } else if (km2 > 0) {
@@ -432,9 +428,9 @@ int step(double *const restrict x,
            size */
         ++ifail;
         {
-            double temp2 = .5;
+            double temp2 = 0.5;
             if (ifail >= 3) {
-                if (ifail != 3 && p5eps < erk * .25) {
+                if (ifail != 3 && p5eps < erk * 0.25) {
                     temp2 = sqrt(p5eps / erk);
                 }
                 knew = 1;
@@ -502,10 +498,10 @@ int step(double *const restrict x,
         *k = km1;
         erk = erkm1;
     } else if (kp1 <= *ns) {
-        for (l = 1; l <= neqn; ++l) {
-            erkp1 += pow(phi[l - 1 + (kp2 - 1) * neqn] / wt[l - 1], 2.0);
+        for (l = 0; l < neqn; ++l) {
+            erkp1 += pow(phi[l + kp1 * neqn] / wt[l], 2.0);
         }
-        erkp1 = absh * gstr[kp1 - 1] * sqrt(erkp1);
+        erkp1 = absh * gstr[*k] * sqrt(erkp1);
 
         /* using estimated error at order k+1, determine appropriate order
            for next step */
@@ -518,7 +514,7 @@ int step(double *const restrict x,
                 *k = kp1;
                 erk = erkp1;
             }
-        } else if (erkp1 < erk * .5) {
+        } else if (erkp1 < erk * 0.5) {
             *k = kp1;
             erk = erkp1;
         }
@@ -555,8 +551,8 @@ int step(double *const restrict x,
 
   # Output from `intrp`
 
-  yout[] -- Solution at `xout`
-  ypout[] -- Derivative of solution at `xout`
+    - `yout`: Solution at `xout`
+    - `ypout`: Derivative of solution at `xout`
 
   The remaining parameters are returned unaltered from their input values.
   Integration with `step` may be continued.
@@ -618,7 +614,7 @@ void intrp(double *const restrict x,
 /*
   `ode` merely allocates storage for `de` to relieve the user of the
   inconvenience of a long call list.  Consequently `de` is used as described
-  in the comments for `ode` .
+  in the comments for `ode`.
 
   The constant `maxnum` is the maximum number of steps allowed in one call to
   `de`.
@@ -672,8 +668,8 @@ void de(const fn_type f,
     eps = max(*relerr, *abserr);
     *iflag = abs(*iflag);
     if (neqn < 1 || *t == tout ||
-        *relerr < 0. || *abserr < 0. ||
-        eps <= 0. || *iflag == 0 ||
+        *relerr < 0.0 || *abserr < 0.0 ||
+        eps <= 0.0 || *iflag == 0 ||
         (*iflag != 1 && (*t != *told || *iflag < 2 || *iflag > 5))) {
         *iflag = 6;
         return;
@@ -686,7 +682,7 @@ void de(const fn_type f,
     stiff = false;
     releps = *relerr / eps;
     abseps = *abserr / eps;
-    if (*iflag == 1 || *isnold < 0 || *delsgn * del <= 0.) {
+    if (*iflag == 1 || *isnold < 0 || *delsgn * del <= 0.0) {
         /* on start and restart also set work variables x and yy, store the
            direction of integration and initialize the step size */
         *start = true;
@@ -847,39 +843,39 @@ void de(const fn_type f,
 
   and initialize the parameters:
 
-  - `neqn`: Number of equations to be integrated
-  - `y`: Vector of initial conditions
-  - `t`: Starting point of integration
-  - `tout`: Point at which solution is desired
-  - `relerr, abserr`: Relative and absolute local error tolerances
-  - `iflag`: `+1` or `-1`. Indicator to initialize the code.  Normal input is
-    `+1`.  The user should set `iflag = -1` only if it is impossible to
-    continue the integration beyond `tout`.
+    - `neqn`: Number of equations to be integrated
+    - `y`: Vector of initial conditions
+    - `t`: Starting point of integration
+    - `tout`: Point at which solution is desired
+    - `relerr, abserr`: Relative and absolute local error tolerances
+    - `iflag`: `+1` or `-1`. Indicator to initialize the code.  Normal input
+      is `+1`.  The user should set `iflag = -1` only if it is impossible to
+      continue the integration beyond `tout`.
 
   All parameters except `f`, `neqn` and `tout` may be altered by the code on
   output so must be variables in the calling program.
 
   # Output from `ode`
 
-  - `neqn`: Unchanged
-  - `y`: Solution at `t`
-  - `t`: Last point reached in integration.  normal return has `t == tout`.
-  - `tout`: Unchanged
-  - `relerr`, `abserr`: normal return has tolerances unchanged.  `iflag = 3`
-    signals tolerances increased
-  - `iflag`: (Note: The value of `iflag` is returned negative when the input
-    value is negative and the integration does not reach `tout`, i.e., `-3`,
-    `-4`, `-5`.)
-      - `2`: Normal return.  Integration reached `tout`.
-      - `3`: Integration did not reach `tout` because error tolerances too
-        small.  `relerr`, `abserr` increased appropriately for continuing.
-      - `4`: Integration did not reach `tout` because more than `maxnum` steps
-         needed.
-      - `5`: Integration did not reach `tout` because equations appear to be
-        stiff.
-      - `6`: Invalid input parameters (fatal error).
-  - `work`, `iwork`: Information generally of no interest to the user but
-    necessary for subsequent calls.
+    - `neqn`: Unchanged
+    - `y`: Solution at `t`
+    - `t`: Last point reached in integration.  normal return has `t == tout`.
+    - `tout`: Unchanged
+    - `relerr`, `abserr`: normal return has tolerances unchanged.  `iflag = 3`
+      signals tolerances increased
+    - `iflag`: (Note: The value of `iflag` is returned negative when the input
+      value is negative and the integration does not reach `tout`, i.e., `-3`,
+      `-4`, `-5`.)
+        - `2`: Normal return.  Integration reached `tout`.
+        - `3`: Integration did not reach `tout` because error tolerances too
+          small.  `relerr`, `abserr` increased appropriately for continuing.
+        - `4`: Integration did not reach `tout` because more than `maxnum`
+           steps needed.
+        - `5`: Integration did not reach `tout` because equations appear to be
+          stiff.
+        - `6`: Invalid input parameters (fatal error).
+    - `work`, `iwork`: Information generally of no interest to the user but
+      necessary for subsequent calls.
 
   # Subsequent calls to `ode`
 
