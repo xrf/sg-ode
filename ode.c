@@ -175,11 +175,10 @@ int step(double *const x,
 
     /* System generated locals */
     int i__1;
-    double d__1, d__2, d__3;
 
     /* Local variables */
-    static int i__, j, l;
-    static double r__;
+    int i;
+    static int j, l;
     static int iq, im1, km1, km2, ip1, kp1, kp2;
     static double erk, err, tau, rho, sum;
     static int nsm2, nsp1, nsp2;
@@ -215,8 +214,7 @@ int step(double *const x,
 
     /* if step size is too small, determine an acceptable one */
     if (fabs(*h__) < 4.0 * DBL_EPSILON * fabs(*x)) {
-        d__1 = 4.0 * DBL_EPSILON * fabs(*x);
-        *h__ = copysign(d__1, *h__);
+        *h__ = copysign(4.0 * DBL_EPSILON * fabs(*x), *h__);
         return 1;
     }
     p5eps = *eps * .5;
@@ -241,7 +239,7 @@ int step(double *const x,
         sum = 0.;
         for (l = 1; l <= neqn; ++l) {
             phi[l + neqn] = yp[l];
-            phi[l + (neqn * 2)] = 0.;
+            phi[l + neqn * 2] = 0.;
             sum += pow(yp[l] / wt[l], 2.0);
         }
         sum = sqrt(sum);
@@ -295,15 +293,16 @@ int step(double *const x,
             sig[nsp1] = 1.;
             if (*k >= nsp1) {
                 const int i__1 = *k;
-                for (i__ = nsp1; i__ <= i__1; ++i__) {
-                    im1 = i__ - 1;
+                int i;
+                for (i = nsp1; i <= i__1; ++i) {
+                    im1 = i - 1;
                     temp2 = psi[im1];
                     psi[im1] = temp1;
-                    beta[i__] = beta[im1] * psi[im1] / temp2;
+                    beta[i] = beta[im1] * psi[im1] / temp2;
                     temp1 = temp2 + *h__;
-                    alpha[i__] = *h__ / temp1;
-                    reali = (double)i__;
-                    sig[i__ + 1] = reali * alpha[i__] * sig[i__];
+                    alpha[i] = *h__ / temp1;
+                    reali = (double)i;
+                    sig[i + 1] = reali * alpha[i] * sig[i];
                 }
             }
             psi[*k] = temp1;
@@ -326,8 +325,8 @@ int step(double *const x,
                     nsm2 = *ns - 2;
                     if (nsm2 >= 1) {
                         for (j = 1; j <= nsm2; ++j) {
-                            i__ = *k - j;
-                            v[i__] -= alpha[j + 1] * v[i__ + 1];
+                            int i = *k - j;
+                            v[i] -= alpha[j + 1] * v[i + 1];
                         }
                     }
                 }
@@ -344,13 +343,14 @@ int step(double *const x,
             /* compute the g[] in the work vector w[] */
             nsp2 = *ns + 2;
             if (kp1 >= nsp2) {
-                for (i__ = nsp2; i__ <= kp1; ++i__) {
-                    const int limit2 = kp2 - i__;
-                    temp6 = alpha[i__ - 1];
+                int i;
+                for (i = nsp2; i <= kp1; ++i) {
+                    const int limit2 = kp2 - i;
+                    temp6 = alpha[i - 1];
                     for (iq = 1; iq <= limit2; ++iq) {
                         w[iq] -= temp6 * w[iq + 1];
                     }
-                    g[i__] = w[1];
+                    g[i] = w[1];
                 }
             }
         }
@@ -363,11 +363,12 @@ int step(double *const x,
 
         /* change phi to phi star */
         if (*k >= nsp1) {
+            int i;
             i__1 = *k;
-            for (i__ = nsp1; i__ <= i__1; ++i__) {
-                temp1 = beta[i__];
+            for (i = nsp1; i <= i__1; ++i) {
+                temp1 = beta[i];
                 for (l = 1; l <= neqn; ++l) {
-                    phi[l + i__ * neqn] = temp1 * phi[l + i__ * neqn];
+                    phi[l + i * neqn] = temp1 * phi[l + i * neqn];
                 }
             }
         }
@@ -379,12 +380,12 @@ int step(double *const x,
         }
         i__1 = *k;
         for (j = 1; j <= i__1; ++j) {
-            i__ = kp1 - j;
-            ip1 = i__ + 1;
-            temp2 = g[i__];
+            int i = kp1 - j;
+            ip1 = i + 1;
+            temp2 = g[i];
             for (l = 1; l <= neqn; ++l) {
-                p[l] += temp2 * phi[l + i__ * neqn];
-                phi[l + i__ * neqn] += phi[l + ip1 * neqn];
+                p[l] += temp2 * phi[l + i * neqn];
+                phi[l + i * neqn] += phi[l + ip1 * neqn];
             }
         }
         if (!*nornd) {
@@ -457,17 +458,18 @@ int step(double *const x,
         *phase1 = false;
         *x = xold;
         i__1 = *k;
-        for (i__ = 1; i__ <= i__1; ++i__) {
-            temp1 = 1. / beta[i__];
-            ip1 = i__ + 1;
+        for (i = 1; i <= i__1; ++i) {
+            temp1 = 1. / beta[i];
+            ip1 = i + 1;
             for (l = 1; l <= neqn; ++l) {
-                phi[l + i__ * neqn] = temp1 * (phi[l + i__ * neqn] - phi[l + ip1 * neqn]);
+                phi[l + i * neqn] = temp1 * (phi[l + i * neqn] - phi[l + ip1 * neqn]);
             }
         }
         if (*k >= 2) {
+            int i;
             const int i__1 = *k;
-            for (i__ = 2; i__ <= i__1; ++i__) {
-                psi[i__ - 1] = psi[i__] - *h__;
+            for (i = 2; i <= i__1; ++i) {
+                psi[i - 1] = psi[i] - *h__;
             }
         }
         /* on third failure, set order to one.  thereafter, use optimal step
@@ -488,8 +490,7 @@ int step(double *const x,
         *h__ = temp2 * *h__;
         *k = knew;
         if (fabs(*h__) < 4.0 * DBL_EPSILON * fabs(*x)) {
-            d__1 = 4.0 * DBL_EPSILON * fabs(*x);
-            *h__ = copysign(d__1, *h__);
+            *h__ = copysign(4.0 * DBL_EPSILON * fabs(*x), *h__);
             *eps += *eps;
             return 1;
         }
@@ -534,10 +535,10 @@ L420:
         phi[l + kp2 * neqn] = phi[l + kp1 * neqn] - phi[l + kp2 * neqn];
     }
     i__1 = *k;
-    for (i__ = 1; i__ <= i__1; ++i__) {
+    for (i = 1; i <= i__1; ++i) {
         for (l = 1; l <= neqn; ++l) {
             /* L430: */
-            phi[l + i__ * neqn] += phi[l + kp1 * neqn];
+            phi[l + i * neqn] += phi[l + kp1 * neqn];
         }
         /* L435: */
     }
@@ -561,10 +562,7 @@ L420:
         goto L460;
     }
     for (l = 1; l <= neqn; ++l) {
-        /* L440: */
-        /* Computing 2nd power */
-        d__1 = phi[l + kp2 * neqn] / wt[l];
-        erkp1 += d__1 * d__1;
+        erkp1 += pow(phi[l + kp2 * neqn] / wt[l], 2.0);
     }
     erkp1 = absh * gstr[kp1 - 1] * sqrt(erkp1);
 
@@ -586,50 +584,34 @@ L445:
         goto L460;
     }
 
-/*   here erkp1 .lt. erk .lt. dmax1(erkm1,erkm2) else order would have */
-/*   been lowered in block 2.  thus order is to be raised */
-
-/*   raise order */
+    /* here erkp1 < erk < max(erkm1, erkm2) else order would have been lowered
+       in block 2.  thus order is to be raised */
 
 L450:
+    /* raise order */
     *k = kp1;
     erk = erkp1;
     goto L460;
 
-/*   lower order */
-
 L455:
+    /* lower order */
     *k = km1;
     erk = erkm1;
 
-/*   with new order determine appropriate step size for next step */
-
 L460:
+    /* with new order determine appropriate step size for next step */
     hnew = *h__ + *h__;
-    if (*phase1) {
-        goto L465;
+    if (!*phase1 && p5eps < erk * pow(2.0, *k + 1)) {
+        hnew = *h__;
+        if (p5eps >= erk) {
+            return 0;
+        }
+        temp2 = (double)(*k + 1);
+        hnew = absh * max(0.5, min(0.9, pow(p5eps / erk, 1.0 / temp2)));
+        hnew = copysign(max(hnew, 4.0 * DBL_EPSILON * fabs(*x)), *h__);
     }
-    if (p5eps >= erk * pow(2.0, *k + 1)) {
-        goto L465;
-    }
-    hnew = *h__;
-    if (p5eps >= erk) {
-        goto L465;
-    }
-    temp2 = (double)(*k + 1);
-    d__1 = p5eps / erk;
-    d__2 = 1. / temp2;
-    r__ = pow(d__1, d__2);
-    /* Computing MAX */
-    d__1 = .5, d__2 = min(.9, r__);
-    hnew = absh * max(d__1, d__2);
-    /* Computing MAX */
-    d__2 = hnew, d__3 = 4.0 * DBL_EPSILON * fabs(*x);
-    d__1 = max(d__2, d__3);
-    hnew = copysign(d__1, *h__);
-L465:
     *h__ = hnew;
-    /*       ***     end block 4     *** */
+    /**** end block 4 ****/
     return 0;
 }
 
@@ -666,15 +648,12 @@ void intrp(double *const x,
            double *psi)
 {
     /* Initialized data */
-
     static double g[13] = {1.};
     static double rho[13] = {1.};
 
-    /* System generated locals */
-    int i__1;
-
     /* Local variables */
-    static int i__, j, l;
+    int i;
+    static int j, l;
     static double w[13], hi;
     static int ki, jm1;
     static double eta;
@@ -697,22 +676,23 @@ void intrp(double *const x,
     kip1 = ki + 1;
 
     /* initialize w for computing g */
-    for (i__ = 1; i__ <= ki; ++i__) {
-        temp1 = (double)i__;
-        w[i__ - 1] = 1. / temp1;
+    for (i = 1; i <= ki; ++i) {
+        temp1 = (double)i;
+        w[i - 1] = 1. / temp1;
     }
     term = 0.;
 
     /* compute g */
 
     for (j = 2; j <= ki; ++j) {
+        int i;
         jm1 = j - 1;
         psijm1 = psi[jm1];
         gamma = (hi + term) / psijm1;
         eta = hi / psijm1;
         limit1 = kip1 - j;
-        for (i__ = 1; i__ <= limit1; ++i__) {
-            w[i__ - 1] = gamma * w[i__ - 1] - eta * w[i__];
+        for (i = 1; i <= limit1; ++i) {
+            w[i - 1] = gamma * w[i - 1] - eta * w[i];
         }
         g[j - 1] = w[0];
         rho[j - 1] = gamma * rho[jm1 - 1];
@@ -720,27 +700,21 @@ void intrp(double *const x,
     }
 
     /* interpolate */
-    i__1 = neqn;
-    for (l = 1; l <= i__1; ++l) {
+    for (l = 1; l <= neqn; ++l) {
         ypout[l] = 0.;
         /* L20: */
         yout[l] = 0.;
     }
-    i__1 = ki;
-    for (j = 1; j <= i__1; ++j) {
-        i__ = kip1 - j;
-        temp2 = g[i__ - 1];
-        temp3 = rho[i__ - 1];
+    for (j = 1; j <= ki; ++j) {
+        int i = kip1 - j;
+        temp2 = g[i - 1];
+        temp3 = rho[i - 1];
         for (l = 1; l <= neqn; ++l) {
-            yout[l] += temp2 * phi[l + i__ * neqn];
-            /* L25: */
-            ypout[l] += temp3 * phi[l + i__ * neqn];
+            yout[l] += temp2 * phi[l + i * neqn];
+            ypout[l] += temp3 * phi[l + i * neqn];
         }
-        /* L30: */
     }
-    i__1 = neqn;
-    for (l = 1; l <= i__1; ++l) {
-        /* L35: */
+    for (l = 1; l <= neqn; ++l) {
         yout[l] = y[l] + hi * yout[l];
     }
 }
@@ -789,10 +763,6 @@ void de(const fn_type f,
         int *const isnold,
         const int maxnum)
 {
-    /* System generated locals */
-    int i__1;
-    double d__1, d__2, d__3, d__4, d__5;
-
     /* Local variables */
     int l;
 
@@ -854,30 +824,23 @@ void de(const fn_type f,
         goto L50;
     }
 
-/*   on start and restart also set work variables x and yy[], store the */
-/*   direction of integration and initialize the step size */
+    /* on start and restart also set work variables x and yy, store the
+       direction of integration and initialize the step size */
 
 L30:
     *start = true;
     *x = *t;
-    i__1 = neqn;
-    for (l = 1; l <= i__1; ++l) {
-        /* L40: */
+    for (l = 1; l <= neqn; ++l) {
         yy[l] = y[l];
     }
     *delsgn = copysign(1.0, del);
-    /* Computing MAX */
-    d__1 = tout - *x;
-    d__3 = fabs(d__1);
-    d__4 = 4.0 * DBL_EPSILON * fabs(*x);
-    d__2 = max(d__3, d__4);
-    d__5 = tout - *x;
-    *h__ = copysign(d__2, d__5);
+    *h__ = copysign(max(fabs(tout - *x), 4.0 * DBL_EPSILON * fabs(*x)),
+                    tout - *x);
 
 /*   if already past output point, interpolate and return */
 
 L50:
-    if ((d__1 = *x - *t, fabs(d__1)) < absdel) {
+    if (fabs(*x - *t) < absdel) {
         goto L60;
     }
     intrp(x, &yy[1], tout, &y[1], &ypout[1], neqn, kold, phi, &psi[1]);
@@ -891,14 +854,12 @@ L50:
 /*   extrapolate and return */
 
 L60:
-    if (isn > 0 || (d__1 = tout - *x, fabs(d__1)) >= 4.0 * DBL_EPSILON * fabs(*x)) {
+    if (isn > 0 || fabs(tout - *x) >= 4.0 * DBL_EPSILON * fabs(*x)) {
         goto L80;
     }
     *h__ = tout - *x;
     (*f)(f_ctx, *x, &yy[1], &yp[1]);
-    i__1 = neqn;
-    for (l = 1; l <= i__1; ++l) {
-        /* L70: */
+    for (l = 1; l <= neqn; ++l) {
         y[l] = yy[l] + *h__ * yp[l];
     }
     *iflag = 2;
@@ -917,9 +878,7 @@ L80:
     if (stiff) {
         *iflag = isn * 5;
     }
-    i__1 = neqn;
-    for (l = 1; l <= i__1; ++l) {
-        /* L90: */
+    for (l = 1; l <= neqn; ++l) {
         y[l] = yy[l];
     }
     *t = *x;
@@ -931,13 +890,9 @@ L80:
 
 L100:
     /* Computing MIN */
-    d__3 = fabs(*h__), d__4 = (d__1 = tend - *x, fabs(d__1));
-    d__2 = min(d__3, d__4);
-    *h__ = copysign(d__2, *h__);
-    i__1 = neqn;
-    for (l = 1; l <= i__1; ++l) {
-        /* L110: */
-        wt[l] = releps * (d__1 = yy[l], fabs(d__1)) + abseps;
+    *h__ = copysign(min(fabs(*h__), fabs(tend - *x)), *h__);
+    for (l = 1; l <= neqn; ++l) {
+        wt[l] = releps * fabs(yy[l]) + abseps;
     }
 
     /*   test for tolerances too small */
@@ -945,9 +900,7 @@ L100:
         *iflag = isn * 3;
         *relerr = eps * releps;
         *abserr = eps * abseps;
-        i__1 = neqn;
-        for (l = 1; l <= i__1; ++l) {
-            /* L120: */
+        for (l = 1; l <= neqn; ++l) {
             y[l] = yy[l];
         }
         *t = *x;
