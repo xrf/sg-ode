@@ -730,16 +730,16 @@ void intrp(double *const x,
 void de(const fn_type f,
         void *const f_ctx,
         const int neqn,
-        double *y,
+        double *const y,
         double *const t,
         const double tout,
         double *const relerr,
         double *const abserr,
         int *const iflag,
-        double *yy,
-        double *wt,
+        double *const yy,
+        double *const wt,
         double *const p,
-        double *yp,
+        double *const yp,
         double *const ypout,
         double *const phi,
         double *const alpha,
@@ -772,12 +772,6 @@ void de(const fn_type f,
     double abseps, eps, releps;
     int kle4, l, nostep;
 
-    /* Parameter adjustments */
-    --yp;
-    --wt;
-    --yy;
-    --y;
-
     /* test for improper parameters */
     eps = max(*relerr, *abserr);
     *iflag = abs(*iflag);
@@ -801,7 +795,7 @@ void de(const fn_type f,
            direction of integration and initialize the step size */
         *start = true;
         *x = *t;
-        for (l = 1; l <= neqn; ++l) {
+        for (l = 0; l < neqn; ++l) {
             yy[l] = y[l];
         }
         *delsgn = copysign(1.0, del);
@@ -813,7 +807,7 @@ void de(const fn_type f,
     for (nostep = 0; ; ++nostep) {
 
         if (fabs(*x - *t) >= absdel) {
-            intrp(x, &yy[1], tout, &y[1], ypout, neqn, kold, phi, psi);
+            intrp(x, yy, tout, y, ypout, neqn, kold, phi, psi);
             *iflag = 2;
             *t = tout;
             *told = *t;
@@ -825,8 +819,8 @@ void de(const fn_type f,
            return */
         if (isn <= 0 || fabs(tout - *x) < 4.0 * DBL_EPSILON * fabs(*x)) {
             *h__ = tout - *x;
-            (*f)(f_ctx, *x, &yy[1], &yp[1]);
-            for (l = 1; l <= neqn; ++l) {
+            (*f)(f_ctx, *x, yy, yp);
+            for (l = 0; l < neqn; ++l) {
                 y[l] = yy[l] + *h__ * yp[l];
             }
             *iflag = 2;
@@ -842,7 +836,7 @@ void de(const fn_type f,
             if (stiff) {
                 *iflag = isn * 5;
             }
-            for (l = 1; l <= neqn; ++l) {
+            for (l = 0; l < neqn; ++l) {
                 y[l] = yy[l];
             }
             *t = *x;
@@ -853,18 +847,18 @@ void de(const fn_type f,
 
         /* limit step size, set weight vector and take a step */
         *h__ = copysign(min(fabs(*h__), fabs(tend - *x)), *h__);
-        for (l = 1; l <= neqn; ++l) {
+        for (l = 0; l < neqn; ++l) {
             wt[l] = releps * fabs(yy[l]) + abseps;
         }
 
         /* test for tolerances too small */
-        if (step(x, &yy[1], f, f_ctx, neqn, h__, &eps, &wt[1], start, hold,
-                 k, kold, phi, p, &yp[1], psi, alpha, beta,
+        if (step(x, yy, f, f_ctx, neqn, h__, &eps, wt, start, hold,
+                 k, kold, phi, p, yp, psi, alpha, beta,
                  sig, v, w, g, phase1, ns, nornd)) {
             *iflag = isn * 3;
             *relerr = eps * releps;
             *abserr = eps * abseps;
-            for (l = 1; l <= neqn; ++l) {
+            for (l = 0; l < neqn; ++l) {
                 y[l] = yy[l];
             }
             *t = *x;
