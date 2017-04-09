@@ -6,6 +6,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
 #include "ode.h"
 
 typedef void (*fn_type)(void *, double, const double *, double *);
@@ -21,11 +22,15 @@ static double max(double x, double y)
 }
 
 static void clear_double_array(double *a, size_t n) {
-    // compilers should be able to optimize this to a simple memcpy
+    // compilers should be able to optimize this to a simple memset
     size_t i;
     for (i = 0; i < n; ++i) {
         a[i] = 0.0;
     }
+}
+
+static void copy_double_array(double *out, const double *in, size_t n) {
+    memcpy(out, in, n * sizeof(*in));
 }
 
 /*
@@ -83,40 +88,39 @@ static void clear_double_array(double *a, size_t n) {
   The user must provide storage in their driver program for all arrays in the
   call list, namely
 
-  y[neqn], wt[neqn], phi[neqn * 16], p[neqn], yp[neqn], psi[12]
+      y[neqn], wt[neqn], phi[neqn * 16], p[neqn], yp[neqn], psi[12]
 
   The user must also declare the `start` Boolean variable and `f` an external
   subroutine, supply the subroutine `f(f_ctx, x, y, yp)` to evaluate
 
-  dy[i]/dx = yp[i] = f(x, y[0], y[1], ..., y[neqn - 1])
+      dy[i]/dx = yp[i] = f(x, y[0], y[1], ..., y[neqn - 1])
 
   and initialize only the following parameters:
 
-  x -- initial value of the independent variable
-  y[] -- vector of initial values of dependent variables
-  neqn -- number of equations to be integrated
-  h -- nominal step size indicating direction of integration
-  and maximum size of step.  must be variable
-  eps -- local error tolerance per step.  must be variable
-  wt[] -- vector of non-zero weights for error criterion
-  start -- .true.
+    - `x`: Initial value of the independent variable
+    - `y`: Vector of initial values of dependent variables
+    - `neqn`: Number of equations to be integrated
+    - `h`: Nominal step size indicating direction of integration
+           and maximum size of step.
+    - `eps`: Local error tolerance per step.
+    - `wt`: Vector of non-zero weights for error criterion
+    - `start`: Set to `true`.
 
   `step` requires the L2 norm of the vector with components
   `local_error[l] / wt[l]` be less than `eps` for a successful step.  The
   array `wt` allows the user to specify an error test appropriate for their
   problem.  For example,
 
-  wt[l] = 1.0  specifies absolute error,
-  = fabs(y[l])  error relative to the most recent value of
-  the l-th component of the solution,
-  = fabs(yp[l])  error relative to the most recent value of
-  the l-th component of the derivative,
-  = max(wt[l], fabs(y[l]))  error relative to the largest magnitude
-  of l-th component obtained so far,
-  = fabs(y(l)) * relerr / eps + abserr / eps
-  specifies a mixed relative-absolute test where relerr is
-  relative error, abserr is absolute error and
-  eps = max(relerr, abserr) .
+    - `wt[l] = 1.0` specifies absolute error,
+    - `wt[l] = fabs(y[l])` error relative to the most recent value of the l-th
+      component of the solution,
+    - `wt[l] = fabs(yp[l])` error relative to the most recent value of the
+      l-th component of the derivative,
+    - `wt[l] = max(wt[l], fabs(y[l]))` error relative to the largest magnitude
+      of l-th component obtained so far,
+    - `wt[l] = fabs(y(l)) * relerr / eps + abserr / eps` specifies a mixed
+      relative-absolute test where `relerr` is relative error, `abserr` is
+      absolute error and `eps = max(relerr, abserr)`.
 
   ## Subsequent calls
 
@@ -716,9 +720,7 @@ void de(const fn_type f,
            direction of integration and initialize the step size */
         *start = true;
         *x = *t;
-        for (l = 0; l < neqn; ++l) {
-            yy[l] = y[l];
-        }
+        copy_double_array(yy, y, (size_t)neqn);
         *delsgn = copysign(1.0, del);
         *h = copysign(max(fabs(tout - *x), 4.0 * DBL_EPSILON * fabs(*x)),
                       tout - *x);
@@ -757,9 +759,7 @@ void de(const fn_type f,
             if (stiff) {
                 *iflag = isn * 5;
             }
-            for (l = 0; l < neqn; ++l) {
-                y[l] = yy[l];
-            }
+            copy_double_array(y, yy, (size_t)neqn);
             *t = *x;
             *told = *t;
             *isnold = 1;
@@ -779,9 +779,7 @@ void de(const fn_type f,
             *iflag = isn * 3;
             *relerr = eps * releps;
             *abserr = eps * abseps;
-            for (l = 0; l < neqn; ++l) {
-                y[l] = yy[l];
-            }
+            copy_double_array(y, yy, (size_t)neqn);
             *t = *x;
             *told = *t;
             *isnold = 1;
