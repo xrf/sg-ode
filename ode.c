@@ -5,6 +5,7 @@
 #include <float.h>
 #include <math.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "ode.h"
@@ -562,22 +563,28 @@ void intrp(double *const restrict x,
            const double xout,
            double *const restrict yout,
            double *const restrict ypout,
-           const int neqn,
+           const size_t neqn,
            int *const restrict kold,
            double *const restrict phi,
            double *const restrict psi)
 {
     const double hi = xout - *x;
-    const int ki = *kold + 1;
+    const unsigned ki = (unsigned)(*kold + 1);
 
-    int i, j, l;
+    size_t l;
+    unsigned i, j;
     double term = 0.0;
     double g[13] = {1.0};
     double rho[13] = {1.0};
     double w[13] = {0.0};
 
+    if (*kold < -1 || *kold >= 13) {
+        fprintf(stderr, "invalid kold\n");
+        fflush(stderr);
+        abort();
+    }
+
     /* initialize w for computing g */
-    assert(ki <= 13);
     for (i = 0; i < ki; ++i) {
         w[i] = 1.0 / (i + 1);
     }
@@ -596,14 +603,14 @@ void intrp(double *const restrict x,
     }
 
     /* interpolate */
-    clear_double_array(ypout, (size_t)neqn);
-    clear_double_array(yout, (size_t)neqn);
+    clear_double_array(ypout, neqn);
+    clear_double_array(yout, neqn);
     for (i = ki; i-- > 0;) {
-        const double temp2 = g[i];
-        const double temp3 = rho[i];
+        const double gi = g[i];
+        const double rhoi = rho[i];
         for (l = 0; l < neqn; ++l) {
-            yout[l] += temp2 * phi[l + i * neqn];
-            ypout[l] += temp3 * phi[l + i * neqn];
+            yout[l] += gi * phi[l + i * neqn];
+            ypout[l] += rhoi * phi[l + i * neqn];
         }
     }
     for (l = 0; l < neqn; ++l) {
@@ -621,7 +628,7 @@ void intrp(double *const restrict x,
 */
 void de(const fn_type f,
         void *const restrict f_ctx,
-        const int neqn,
+        const size_t neqn,
         double *const restrict y,
         double *const restrict t,
         const double tout,
@@ -662,7 +669,8 @@ void de(const fn_type f,
 
     bool stiff;
     double abseps, eps, releps;
-    int kle4, l, nostep;
+    int kle4, nostep;
+    size_t l;
 
     /* test for improper parameters */
     eps = max(*relerr, *abserr);
@@ -891,7 +899,7 @@ void de(const fn_type f,
 */
 void ode(const fn_type f,
          void *const restrict f_ctx,
-         const int neqn,
+         const size_t neqn,
          double *const restrict y,
          double *const restrict t,
          const double tout,
@@ -902,27 +910,27 @@ void ode(const fn_type f,
          int *const restrict iwork,
          const int maxnum)
 {
-    static const int ialpha = 0;
-    static const int ih = 88;
-    static const int ihold = 89;
-    static const int istart = 90;
-    static const int itold = 91;
-    static const int idelsn = 92;
-    static const int ibeta = 12;
-    static const int isig = 24;
-    static const int iv = 37;
-    static const int iw = 49;
-    static const int ig = 61;
-    static const int iphase = 74;
-    static const int ipsi = 75;
-    static const int ix = 87;
-    static const int iyy = 99;
+    static const size_t ialpha = 0;
+    static const size_t ih = 88;
+    static const size_t ihold = 89;
+    static const size_t istart = 90;
+    static const size_t itold = 91;
+    static const size_t idelsn = 92;
+    static const size_t ibeta = 12;
+    static const size_t isig = 24;
+    static const size_t iv = 37;
+    static const size_t iw = 49;
+    static const size_t ig = 61;
+    static const size_t iphase = 74;
+    static const size_t ipsi = 75;
+    static const size_t ix = 87;
+    static const size_t iyy = 99;
 
-    const int iwt = iyy + neqn;
-    const int ip = iwt + neqn;
-    const int iyp = ip + neqn;
-    const int iypout = iyp + neqn;
-    const int iphi = iypout + neqn;
+    const size_t iwt = iyy + neqn;
+    const size_t ip = iwt + neqn;
+    const size_t iyp = ip + neqn;
+    const size_t iypout = iyp + neqn;
+    const size_t iphi = iypout + neqn;
 
     bool nornd, phase1, start;
 

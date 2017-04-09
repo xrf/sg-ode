@@ -35,14 +35,14 @@ void f(void *ctx, double t, const double *y, double *yp)
 int main(void)
 {
     static const int maxnum = 500;
+    static const size_t neqn = 3;
     double y[3], t, tout, work[163] = {0.0};
     int i;
     int iwork[5] = {0};
-    int neqn = 3;
     double relerr = 1.0e-9;
     double abserr = 1.0e-16;
     int iflag = 1;
-    printf("neqn=%i relerr=%g abserr=%g iflag=%i\n",
+    printf("neqn=%zu relerr=%g abserr=%g iflag=%i\n",
            neqn, relerr, abserr, iflag);
 
 #define dump() \
