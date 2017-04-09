@@ -172,8 +172,8 @@ int step(double *const restrict x,
          double *const restrict wt,
          bool *const restrict start,
          double *const restrict hold,
-         int *const restrict k,
-         int *const restrict kold,
+         unsigned *const restrict k,
+         unsigned *const restrict kold,
          double *const restrict phi,
          double *const restrict p,
          double *const restrict yp,
@@ -185,7 +185,7 @@ int step(double *const restrict x,
          double *const restrict w,
          double *const restrict g,
          bool *const restrict phase1,
-         int *const restrict ns,
+         unsigned *const restrict ns,
          bool *const restrict nornd)
 {
     static const double gstr[13] = {
@@ -196,7 +196,9 @@ int step(double *const restrict x,
     const double p5eps = *eps * 0.5;
 
     size_t l;
-    int i, ifail, iq, j, knew;
+    unsigned knew;
+    unsigned i, iq, j;
+    int ifail;
     double absh, erk, erkm1, erkm2, erkp1, err, hnew, round, temp1;
 
     /**** begin block 0 ****/
@@ -267,6 +269,9 @@ int step(double *const restrict x,
             ++*ns;
         }
         if (*k >= *ns) {
+            // PRE: ns >= 1
+            
+            unsigned i;
             temp1 = *h * *ns;
             /* compute those components of alpha, beta, psi, sig which are
                changed */
@@ -296,7 +301,7 @@ int step(double *const restrict x,
                 if (*k > *kold) {
                     v[*k - 1] = 1.0 / (*k * (*k + 1));
                     for (j = 1; j < *ns - 1; ++j) {
-                        const int i = *k - j;
+                        const unsigned i = *k - j;
                         v[i - 1] -= alpha[j] * v[i];
                     }
                 }
@@ -377,7 +382,7 @@ int step(double *const restrict x,
             if (*k > 2) {
                 erkm2 = absh * sig[*k - 2] * gstr[*k - 3] * sqrt(erkm2);
             }
-            if (k >= 2) {
+            if (*k >= 2) {
                 erkm1 = absh * sig[*k - 1] * gstr[*k - 2] * sqrt(erkm1);
             }
             const double temp5 = absh * sqrt(erk);
@@ -562,7 +567,7 @@ void intrp(double *const restrict x,
            double *const restrict yout,
            double *const restrict ypout,
            const size_t neqn,
-           int *const restrict kold,
+           unsigned *const restrict kold,
            double *const restrict phi,
            double *const restrict psi)
 {
@@ -576,7 +581,7 @@ void intrp(double *const restrict x,
     double rho[13] = {1.0};
     double w[13] = {0.0};
 
-    if (*kold < -1 || *kold >= 13) {
+    if (*kold >= 13) {
         fprintf(stderr, "invalid kold\n");
         fflush(stderr);
         abort();
@@ -653,10 +658,10 @@ void de(const fn_type f,
         bool *const restrict start,
         double *const restrict told,
         double *const restrict delsgn,
-        int *const restrict ns,
+        unsigned *const restrict ns,
         bool *const restrict nornd,
-        int *const restrict k,
-        int *const restrict kold,
+        unsigned *const restrict k,
+        unsigned *const restrict kold,
         int *const restrict isnold,
         const int maxnum)
 {
@@ -941,8 +946,8 @@ void ode(const fn_type f,
        &work[iyy], &work[iwt], &work[ip], &work[iyp], &work[iypout],
        &work[iphi], &work[ialpha], &work[ibeta], &work[isig], &work[iv],
        &work[iw], &work[ig], &phase1, &work[ipsi], &work[ix], &work[ih],
-       &work[ihold], &start, &work[itold], &work[idelsn], &iwork[0],
-       &nornd, &iwork[2], &iwork[3], &iwork[4], maxnum);
+       &work[ihold], &start, &work[itold], &work[idelsn], (unsigned *)&iwork[0],
+       &nornd, (unsigned *)&iwork[2], (unsigned *)&iwork[3], &iwork[4], maxnum);
     if (start) {
         work[istart] = 1.0;
     } else {
