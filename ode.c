@@ -738,18 +738,18 @@ void de(const fn_type f,
         int *const iflag,
         double *yy,
         double *wt,
-        double *p,
+        double *const p,
         double *yp,
-        double *ypout,
+        double *const ypout,
         double *const phi,
-        double *alpha,
-        double *beta,
-        double *sig,
-        double *v,
-        double *w,
-        double *g,
+        double *const alpha,
+        double *const beta,
+        double *const sig,
+        double *const v,
+        double *const w,
+        double *const g,
         bool *const phase1,
-        double *psi,
+        double *const psi,
         double *const x,
         double *const h__,
         double *const hold,
@@ -763,36 +763,22 @@ void de(const fn_type f,
         int *const isnold,
         const int maxnum)
 {
-    /* Local variables */
-    int l;
-
-    double del, absdel, tend;
-    double eps;
-    int kle4;
-    bool stiff;
-    double abseps, releps;
-    int nostep;
-
     const int isn = *iflag >= 0 ? 1 : -1;
+    const double del = tout - *t;
+    const double absdel = fabs(del);
+    const double tend = isn < 0 ? tout : *t + del * 10.0;
+
+    bool stiff;
+    double abseps, eps, releps;
+    int kle4, l, nostep;
 
     /* Parameter adjustments */
-    --ypout;
     --yp;
-    --p;
     --wt;
     --yy;
     --y;
-    --alpha;
-    --beta;
-    --sig;
-    --v;
-    --w;
-    --g;
-    --psi;
 
-    /* Function Body */
-
-    /*   test for improper parameters */
+    /* test for improper parameters */
     eps = max(*relerr, *abserr);
     *iflag = abs(*iflag);
     if (neqn < 1 || *t == tout ||
@@ -803,129 +789,107 @@ void de(const fn_type f,
         return;
     }
 
-    /*   on each call set interval of integration and counter for number of */
-    /*   steps.  adjust input error tolerances to define weight vector for */
-    /*   subroutine  step */
-    del = tout - *t;
-    absdel = fabs(del);
-    tend = isn < 0 ? tout : *t + del * 10.0;
-    nostep = 0;
+    /* on each call set interval of integration and counter for number of
+       steps.  adjust input error tolerances to define weight vector for
+       subroutine step */
     kle4 = 0;
     stiff = false;
     releps = *relerr / eps;
     abseps = *abserr / eps;
-    if (*iflag == 1) {
-        goto L30;
-    }
-    if (*isnold < 0) {
-        goto L30;
-    }
-    if (*delsgn * del > 0.) {
-        goto L50;
-    }
-
-    /* on start and restart also set work variables x and yy, store the
-       direction of integration and initialize the step size */
-
-L30:
-    *start = true;
-    *x = *t;
-    for (l = 1; l <= neqn; ++l) {
-        yy[l] = y[l];
-    }
-    *delsgn = copysign(1.0, del);
-    *h__ = copysign(max(fabs(tout - *x), 4.0 * DBL_EPSILON * fabs(*x)),
-                    tout - *x);
-
-/*   if already past output point, interpolate and return */
-
-L50:
-    if (fabs(*x - *t) < absdel) {
-        goto L60;
-    }
-    intrp(x, &yy[1], tout, &y[1], &ypout[1], neqn, kold, phi, &psi[1]);
-    *iflag = 2;
-    *t = tout;
-    *told = *t;
-    *isnold = isn;
-    return;
-
-/*   if cannot go past output point and sufficiently close, */
-/*   extrapolate and return */
-
-L60:
-    if (isn > 0 || fabs(tout - *x) >= 4.0 * DBL_EPSILON * fabs(*x)) {
-        goto L80;
-    }
-    *h__ = tout - *x;
-    (*f)(f_ctx, *x, &yy[1], &yp[1]);
-    for (l = 1; l <= neqn; ++l) {
-        y[l] = yy[l] + *h__ * yp[l];
-    }
-    *iflag = 2;
-    *t = tout;
-    *told = *t;
-    *isnold = isn;
-    return;
-
-/*   test for too many steps */
-
-L80:
-    if (nostep < maxnum) {
-        goto L100;
-    }
-    *iflag = isn * 4;
-    if (stiff) {
-        *iflag = isn * 5;
-    }
-    for (l = 1; l <= neqn; ++l) {
-        y[l] = yy[l];
-    }
-    *t = *x;
-    *told = *t;
-    *isnold = 1;
-    return;
-
-/*   limit step size, set weight vector and take a step */
-
-L100:
-    /* Computing MIN */
-    *h__ = copysign(min(fabs(*h__), fabs(tend - *x)), *h__);
-    for (l = 1; l <= neqn; ++l) {
-        wt[l] = releps * fabs(yy[l]) + abseps;
-    }
-
-    /*   test for tolerances too small */
-    if (step(x, &yy[1], f, f_ctx, neqn, h__, &eps, &wt[1], start, hold, k, kold, phi, &p[1], &yp[1], &psi[1], &alpha[1], &beta[1], &sig[1], &v[1], &w[1], &g[1], phase1, ns, nornd)) {
-        *iflag = isn * 3;
-        *relerr = eps * releps;
-        *abserr = eps * abseps;
+    if (*iflag == 1 || *isnold < 0 || *delsgn * del <= 0.) {
+        /* on start and restart also set work variables x and yy, store the
+           direction of integration and initialize the step size */
+        *start = true;
+        *x = *t;
         for (l = 1; l <= neqn; ++l) {
-            y[l] = yy[l];
+            yy[l] = y[l];
         }
-        *t = *x;
-        *told = *t;
-        *isnold = 1;
-        return;
+        *delsgn = copysign(1.0, del);
+        *h__ = copysign(max(fabs(tout - *x), 4.0 * DBL_EPSILON * fabs(*x)),
+                        tout - *x);
     }
-    /*   augment counter on number of steps and test for stiffness */
-    ++nostep;
-    ++kle4;
-    if (*kold > 4) {
-        kle4 = 0;
+
+    /* if already past output point, interpolate and return */
+    for (nostep = 0; ; ++nostep) {
+
+        if (fabs(*x - *t) >= absdel) {
+            intrp(x, &yy[1], tout, &y[1], ypout, neqn, kold, phi, psi);
+            *iflag = 2;
+            *t = tout;
+            *told = *t;
+            *isnold = isn;
+            return;
+        }
+
+        /* if cannot go past output point and sufficiently close, extrapolate and
+           return */
+        if (isn <= 0 || fabs(tout - *x) < 4.0 * DBL_EPSILON * fabs(*x)) {
+            *h__ = tout - *x;
+            (*f)(f_ctx, *x, &yy[1], &yp[1]);
+            for (l = 1; l <= neqn; ++l) {
+                y[l] = yy[l] + *h__ * yp[l];
+            }
+            *iflag = 2;
+            *t = tout;
+            *told = *t;
+            *isnold = isn;
+            return;
+        }
+
+        /* test for too many steps */
+        if (nostep >= maxnum) {
+            *iflag = isn * 4;
+            if (stiff) {
+                *iflag = isn * 5;
+            }
+            for (l = 1; l <= neqn; ++l) {
+                y[l] = yy[l];
+            }
+            *t = *x;
+            *told = *t;
+            *isnold = 1;
+            return;
+        }
+
+        /* limit step size, set weight vector and take a step */
+        *h__ = copysign(min(fabs(*h__), fabs(tend - *x)), *h__);
+        for (l = 1; l <= neqn; ++l) {
+            wt[l] = releps * fabs(yy[l]) + abseps;
+        }
+
+        /* test for tolerances too small */
+        if (step(x, &yy[1], f, f_ctx, neqn, h__, &eps, &wt[1], start, hold,
+                 k, kold, phi, p, &yp[1], psi, alpha, beta,
+                 sig, v, w, g, phase1, ns, nornd)) {
+            *iflag = isn * 3;
+            *relerr = eps * releps;
+            *abserr = eps * abseps;
+            for (l = 1; l <= neqn; ++l) {
+                y[l] = yy[l];
+            }
+            *t = *x;
+            *told = *t;
+            *isnold = 1;
+            return;
+        }
+
+        /* augment counter on number of steps and test for stiffness */
+        ++kle4;
+        if (*kold > 4) {
+            kle4 = 0;
+        }
+        if (kle4 >= 50) {
+            stiff = true;
+        }
     }
-    if (kle4 >= 50) {
-        stiff = true;
-    }
-    goto L50;
 }
 
 /*
   Integrates a system of `neqn` first order ordinary differential equations of
   the form:
 
-  dy[i]/dt = f(t, y[0], y[1], ..., y[neqn - 1])
-  y[i] given at `t`
+      dy[i]/dt = f(t, y[0], y[1], ..., y[neqn - 1])
+      y[i] given at `t`
 
   The subroutine integrates from `t` to `tout`.  On return the parameters in
   the call list are set for continuing the integration.  The user has only to
@@ -991,49 +955,47 @@ L100:
   The user must provide storage in their calling program for the arrays
   in the call list,
 
-  y[neqn], work[100 + 21 * neqn], iwork[5],
+      y[neqn], work[100 + 21 * neqn], iwork[5],
 
   Supply supply the subroutine `f(f_ctx, t, y, yp)` to evaluate
 
-  dy[i]/dt = yp[i] = f(t, y[0], y[1], ..., y[neqn - 1])
+      dy[i]/dt = yp[i] = f(t, y[0], y[1], ..., y[neqn - 1])
 
   and initialize the parameters:
 
-  `neqn` -- number of equations to be integrated
-  `y[]` -- vector of initial conditions
-  `t` -- starting point of integration
-  `tout` -- point at which solution is desired
-  `relerr, abserr` -- relative and absolute local error tolerances
-  `iflag` -- +1,-1.  indicator to initialize the code.  normal input
-  is +1.  the user should set iflag=-1 only if it is
-  impossible to continue the integration beyond `tout`.
+  - `neqn`: Number of equations to be integrated
+  - `y`: Vector of initial conditions
+  - `t`: Starting point of integration
+  - `tout`: Point at which solution is desired
+  - `relerr, abserr`: Relative and absolute local error tolerances
+  - `iflag`: `+1` or `-1`. Indicator to initialize the code.  Normal input is
+    `+1`.  The user should set `iflag = -1` only if it is impossible to
+    continue the integration beyond `tout`.
 
-  All parameters except `f`, `neqn` and `tout`  may be altered by the
-  code on output so must be variables in the calling program.
+  All parameters except `f`, `neqn` and `tout` may be altered by the code on
+  output so must be variables in the calling program.
 
   # Output from `ode`
 
-  `neqn` -- unchanged
-  `y[]` -- solution at `t`
-  `t` -- last point reached in integration.  normal return has
-  `t == tout`.
-  `tout` -- unchanged
-  `relerr`, `abserr` -- normal return has tolerances unchanged.  `iflag=3`
-  signals tolerances increased
-  iflag = 2 -- normal return.  integration reached  tout
-  = 3 -- integration did not reach  tout  because error
-  tolerances too small.  relerr ,  abserr  increased
-  appropriately for continuing
-  = 4 -- integration did not reach  tout  because more than
-  500 steps needed
-  = 5 -- integration did not reach  tout  because equations
-  appear to be stiff
-  = 6 -- invalid input parameters (fatal error)
-  the value of  iflag  is returned negative when the input
-  value is negative and the integration does not reach  tout ,
-  i.e., -3, -4, -5.
-  work[], iwork[] -- information generally of no interest to the
-  user but necessary for subsequent calls.
+  - `neqn`: Unchanged
+  - `y`: Solution at `t`
+  - `t`: Last point reached in integration.  normal return has `t == tout`.
+  - `tout`: Unchanged
+  - `relerr`, `abserr`: normal return has tolerances unchanged.  `iflag = 3`
+    signals tolerances increased
+  - `iflag`: (Note: The value of `iflag` is returned negative when the input
+    value is negative and the integration does not reach `tout`, i.e., `-3`,
+    `-4`, `-5`.)
+      - `2`: Normal return.  Integration reached `tout`.
+      - `3`: Integration did not reach `tout` because error tolerances too
+        small.  `relerr`, `abserr` increased appropriately for continuing.
+      - `4`: Integration did not reach `tout` because more than `maxnum` steps
+         needed.
+      - `5`: Integration did not reach `tout` because equations appear to be
+        stiff.
+      - `6`: Invalid input parameters (fatal error).
+  - `work`, `iwork`: Information generally of no interest to the user but
+    necessary for subsequent calls.
 
   # Subsequent calls to `ode`
 
@@ -1043,9 +1005,9 @@ L100:
   user wants to continue, simply call again.  The output value of `iflag` is
   the appropriate input value for subsequent calls.  The only situation in
   which it should be altered is to stop the integration internally at the new
-  `tout`, i.e., change output `iflag=2` to input `iflag=-2`.  Error tolerances
-  may be changed by the user before continuing.  All other parameters must
-  remain unchanged.
+  `tout`, i.e., change output `iflag = 2` to input `iflag = -2`.  Error
+  tolerances may be changed by the user before continuing.  All other
+  parameters must remain unchanged.
 */
 void ode(const fn_type f,
          void *const f_ctx,
