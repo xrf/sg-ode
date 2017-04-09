@@ -270,7 +270,7 @@ int step(double *const restrict x,
         }
         if (*k >= *ns) {
             // PRE: ns >= 1
-            
+
             unsigned i;
             temp1 = *h * *ns;
             /* compute those components of alpha, beta, psi, sig which are
@@ -910,7 +910,7 @@ void ode(const fn_type f,
          double *const restrict abserr,
          int *const restrict iflag,
          double *const restrict work,
-         int *const restrict iwork,
+         struct Iwork *const iwork,
          const int maxnum)
 {
     static const size_t ialpha = 0;
@@ -935,19 +935,18 @@ void ode(const fn_type f,
     const size_t iypout = iyp + neqn;
     const size_t iphi = iypout + neqn;
 
-    bool nornd, phase1, start;
+    bool phase1, start;
 
     if (abs(*iflag) != 1) {
         start = work[istart] > 0.;
         phase1 = work[iphase] > 0.;
-        nornd = iwork[1] != -1;
     }
     de(f, f_ctx, neqn, y, t, tout, relerr, abserr, iflag,
        &work[iyy], &work[iwt], &work[ip], &work[iyp], &work[iypout],
        &work[iphi], &work[ialpha], &work[ibeta], &work[isig], &work[iv],
        &work[iw], &work[ig], &phase1, &work[ipsi], &work[ix], &work[ih],
-       &work[ihold], &start, &work[itold], &work[idelsn], (unsigned *)&iwork[0],
-       &nornd, (unsigned *)&iwork[2], (unsigned *)&iwork[3], &iwork[4], maxnum);
+       &work[ihold], &start, &work[itold], &work[idelsn], &iwork->ns,
+       &iwork->nornd, &iwork->k, &iwork->kold, &iwork->isnold, maxnum);
     if (start) {
         work[istart] = 1.0;
     } else {
@@ -957,10 +956,5 @@ void ode(const fn_type f,
         work[iphase] = 1.0;
     } else {
         work[iphase] = -1.0;
-    }
-    if (nornd) {
-        iwork[1] = 1;
-    } else {
-        iwork[1] = -1;
     }
 }

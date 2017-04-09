@@ -1,8 +1,16 @@
 #ifndef G_U239L9IU4I9YYJGH4M9CD6ADMGT66
 #define G_U239L9IU4I9YYJGH4M9CD6ADMGT66
+#include <stdbool.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+struct Iwork {
+    unsigned ns;
+    bool nornd;
+    unsigned k, kold;
+    int isnold;
+};
 
 void ode(void (*f)(void *restrict f_ctx,
                    double t,
@@ -17,7 +25,7 @@ void ode(void (*f)(void *restrict f_ctx,
          double *restrict abserr,
          int *restrict iflag,
          double *restrict work,
-         int *restrict iwork,
+         struct Iwork *const iwork,
          int maxnum);
 
 #ifdef __cplusplus

@@ -38,7 +38,7 @@ int main(void)
     static const size_t neqn = 3;
     double y[3], t, tout, work[163] = {0.0};
     int i;
-    int iwork[5] = {0};
+    struct Iwork iwork = {65535, false, 65535, 65535, 32767};
     double relerr = 1.0e-9;
     double abserr = 1.0e-16;
     int iflag = 1;
@@ -59,7 +59,7 @@ int main(void)
         tout = 5.0 * i;
     retry:
         ode(f, NULL, neqn, y, &t, tout, &relerr, &abserr,
-            &iflag, work, iwork, maxnum);
+            &iflag, work, &iwork, maxnum);
         dump();
         switch (iflag) {
         case 1:
