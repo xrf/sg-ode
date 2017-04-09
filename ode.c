@@ -214,6 +214,7 @@ int step(double *const restrict y,
     }
 
     /* if error tolerance is too small, increase it to an acceptable value */
+    /* round = ‖𝐲 / 𝛚‖² */
     round = 0.0;
     for (l = 0; l < neqn; ++l) {
         round += pow(y[l] / wt[l], 2.0);
@@ -231,9 +232,12 @@ int step(double *const restrict y,
         (*f)(f_ctx, *x, y, yp);
         {
             double sum = 0.0;
+            /* 𝛗[1] ← 𝟎 */
             clear_double_array(phi + neqn, neqn);
+            /* 𝛗[0] ← 𝐲′ */
+            copy_double_array(phi, yp, neqn);
+            /* sum = ‖𝐲′ / 𝛚‖² */
             for (l = 0; l < neqn; ++l) {
-                phi[l] = yp[l];
                 sum += pow(yp[l] / wt[l], 2.0);
             }
             sum = sqrt(sum);
@@ -251,6 +255,7 @@ int step(double *const restrict y,
         *nornd = true;
         if (p5eps <= round * 100.0) {
             *nornd = false;
+            /* φ[14] ← 𝟎 */
             clear_double_array(&phi[neqn * 14], neqn);
         }
     }
@@ -331,29 +336,39 @@ int step(double *const restrict y,
 
         /* change phi to phi star */
         for (i = *ns; i < *k; ++i) {
+            /* 𝛗[i] ← β[i] 𝛗[i] */
             for (l = 0; l < neqn; ++l) {
-                phi[l + i * neqn] = beta[i] * phi[l + i * neqn];
+                phi[l + i * neqn] *= beta[i];
             }
         }
         /* predict solution and differences */
-        for (l = 0; l < neqn; ++l) {
-            phi[l + (*k + 1) * neqn] = phi[l + *k * neqn];
-            phi[l + *k * neqn] = 0.0;
-        }
+        /* 𝛗[k + 1] ← 𝛗[k] */
+        copy_double_array(phi + (*k + 1) * neqn, phi + *k * neqn, neqn);
+        /* 𝛗[k] ← 𝟎 */
+        clear_double_array(phi + *k * neqn, neqn);
+        /* 𝐩 ← 𝟎 */
         clear_double_array(p, neqn);
         for (i = *k; i-- > 0;) {
+            /* 𝐩 ← 𝐩 + g[i] 𝛗[i] */
             for (l = 0; l < neqn; ++l) {
                 p[l] += g[i] * phi[l + i * neqn];
+            }
+            /* 𝛗[i] ← 𝛗[i] + 𝛗[i + 1] */
+            for (l = 0; l < neqn; ++l) {
                 phi[l + i * neqn] += phi[l + (i + 1) * neqn];
             }
         }
         if (!*nornd) {
+            /* 𝛕 = h 𝐩 - 𝛗[14]
+               𝐩 ← 𝐲 + 𝛕
+               𝛗[15] ← (𝐩 - 𝐲) - 𝛕 */
             for (l = 0; l < neqn; ++l) {
                 const double tau = *h * p[l] - phi[l + neqn * 14];
                 p[l] = y[l] + tau;
-                phi[l + neqn * 15] = p[l] - y[l] - tau;
+                phi[l + neqn * 15] = (p[l] - y[l]) - tau;
             }
         } else {
+            /* 𝐩 ← 𝐲 + h 𝐩 */
             for (l = 0; l < neqn; ++l) {
                 p[l] = y[l] + *h * p[l];
             }
@@ -368,6 +383,9 @@ int step(double *const restrict y,
             erkm2 = 0.0;
             erkm1 = 0.0;
             erk = 0.0;
+            /* erkm2 = ‖(𝛗[k - 2] + 𝐲′ - 𝛗[0]) / 𝛚‖²
+               erkm1 = ‖(𝛗[k - 1] + 𝐲′ - 𝛗[0]) / 𝛚‖²
+               erk = ‖(𝐲′ - 𝛗[0]) / 𝛚‖² */
             for (l = 0; l < neqn; ++l) {
                 const double iwt = 1.0 / wt[l];
                 const double ypmphi = yp[l] - phi[l];
@@ -419,6 +437,7 @@ int step(double *const restrict y,
             *x = xold;
         }
         for (i = 0; i < *k; ++i) {
+            /* 𝛗[i] ← β[i]⁻¹ (𝛗[i] - 𝛗[i + 1]) */
             for (l = 0; l < neqn; ++l) {
                 phi[l + i * neqn] =
                     (1.0 / beta[i]) *
@@ -461,12 +480,16 @@ int step(double *const restrict y,
     {
         const double hgk = *h * g[*k];
         if (!*nornd) {
+            /* 𝛒 = h g[k] (𝐲′ - 𝛗[0]) - 𝛗[15]
+               𝐲 ← 𝐩 + 𝛒
+               𝛗[14] ← (𝐲 - 𝐩) - 𝛒 */
             for (l = 0; l < neqn; ++l) {
                 const double rho = hgk * (yp[l] - phi[l]) - phi[l + neqn * 15];
                 y[l] = p[l] + rho;
-                phi[l + neqn * 14] = y[l] - p[l] - rho;
+                phi[l + neqn * 14] = (y[l] - p[l]) - rho;
             }
         } else {
+            /* 𝐲 ← 𝐩 + h g[k] (𝐲′ - 𝛗[0]) */
             for (l = 0; l < neqn; ++l) {
                 y[l] = p[l] + hgk * (yp[l] - phi[l]);
             }
@@ -475,11 +498,15 @@ int step(double *const restrict y,
     (*f)(f_ctx, *x, y, yp);
 
     /* update differences for next step */
-
+    /* 𝛗[k] ← 𝐲′ - 𝛗[0]
+       𝛗[k + 1] ← 𝛗[k] - 𝛗[k + 1] */
     for (l = 0; l < neqn; ++l) {
         phi[l + *k * neqn] = yp[l] - phi[l];
-        phi[l + (*k + 1) * neqn] = phi[l + *k * neqn] - phi[l + (*k + 1) * neqn];
+        phi[l + (*k + 1) * neqn] =
+            phi[l + *k * neqn] -
+            phi[l + (*k + 1) * neqn];
     }
+    /* ∀ i ∈ [0, k).  𝛗[i] ← 𝛗[i] + 𝛗[k] */
     for (i = 0; i < *k; ++i) {
         for (l = 0; l < neqn; ++l) {
             phi[l + i * neqn] += phi[l + *k * neqn];
@@ -502,6 +529,7 @@ int step(double *const restrict y,
         --*k;
         erk = erkm1;
     } else if (*k < *ns) {
+        /* erkp1 = ‖𝛗[k + 1] / 𝛚‖² */
         for (l = 0; l < neqn; ++l) {
             erkp1 += pow(phi[l + (*k + 1) * neqn] / wt[l], 2.0);
         }
@@ -606,16 +634,21 @@ void intrp(const double x,
     }
 
     /* interpolate */
+    /* 𝐲°′ ← 𝟎 */
     clear_double_array(ypout, neqn);
+    /* 𝐲° ← 𝟎 */
     clear_double_array(yout, neqn);
     for (i = ki; i-- > 0;) {
         const double gi = g[i];
         const double rhoi = rho[i];
+        /* 𝐲° ← 𝐲° + g[i] 𝛗[i]
+           𝐲°′ ← 𝐲°′ + ρ[i] 𝛗[i] */
         for (l = 0; l < neqn; ++l) {
             yout[l] += gi * phi[l + i * neqn];
             ypout[l] += rhoi * phi[l + i * neqn];
         }
     }
+    /* 𝐲° ← 𝐲 + hi 𝐲° */
     for (l = 0; l < neqn; ++l) {
         yout[l] = y[l] + hi * yout[l];
     }
@@ -680,6 +713,7 @@ void de(const fn_type f,
            direction of integration and initialize the step size */
         self->start = true;
         self->x = *t;
+        /* 𝐘 ← 𝐲 */
         copy_double_array(yy, y, neqn);
         self->delsgn = copysign(1.0, del);
         self->h = copysign(max(fabs(tout - self->x),
@@ -691,6 +725,7 @@ void de(const fn_type f,
     for (nostep = 0;; ++nostep) {
 
         if (fabs(self->x - *t) >= absdel) {
+            /* (𝐲, 𝐲°′) ← intrp(x, 𝐘, tout, kold, 𝛗, 𝛙) */
             intrp(self->x, yy, tout, y, ypout, neqn,
                   self->kold, phi, self->psi);
             *iflag = 2;
@@ -705,6 +740,7 @@ void de(const fn_type f,
         if (!isn || fabs(tout - self->x) < 4.0 * DBL_EPSILON * fabs(self->x)) {
             self->h = tout - self->x;
             (*f)(f_ctx, self->x, yy, yp);
+            /* 𝐲 ← 𝐘 + h 𝐲′ */
             for (l = 0; l < neqn; ++l) {
                 y[l] = yy[l] + self->h * yp[l];
             }
@@ -721,6 +757,7 @@ void de(const fn_type f,
             if (stiff) {
                 *iflag = isn ? 5 : -5;
             }
+            /* 𝐲 ← 𝐘 */
             copy_double_array(y, yy, neqn);
             *t = self->x;
             self->told = *t;
@@ -730,6 +767,7 @@ void de(const fn_type f,
 
         /* limit step size, set weight vector and take a step */
         self->h = copysign(min(fabs(self->h), fabs(tend - self->x)), self->h);
+        /* 𝛚 ← releps |𝐘| + abseps */
         for (l = 0; l < neqn; ++l) {
             wt[l] = releps * fabs(yy[l]) + abseps;
         }
@@ -739,6 +777,7 @@ void de(const fn_type f,
             *iflag = isn ? 3 : -3;
             *relerr = eps * releps;
             *abserr = eps * abseps;
+            /* 𝐲 ← 𝐘 */
             copy_double_array(y, yy, neqn);
             *t = self->x;
             self->told = *t;
