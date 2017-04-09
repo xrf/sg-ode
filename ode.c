@@ -161,20 +161,20 @@ static void copy_double_array(double *out, const double *in, size_t n) {
   required nor desirable.
 */
 int step(double *const restrict x,
-         double *restrict y,
+         double *const restrict y,
          const fn_type f,
          void *const restrict f_ctx,
          const int neqn,
          double *const restrict h,
          double *const restrict eps,
-         double *wt,
+         double *const restrict wt,
          bool *const restrict start,
          double *const restrict hold,
          int *const restrict k,
          int *const restrict kold,
          double *restrict phi,
-         double *restrict p,
-         double *restrict yp,
+         double *const restrict p,
+         double *const restrict yp,
          double *const restrict psi,
          double *const restrict alpha,
          double *const restrict beta,
@@ -197,11 +197,7 @@ int step(double *const restrict x,
     double absh, erk, erkm1, erkm2, erkp1, err, hnew, round, temp1;
 
     /* Parameter adjustments */
-    --yp;
-    --p;
     phi -= 1 + neqn;
-    --wt;
-    --y;
 
     /**** begin block 0 ****/
     /* check if step size or error tolerance is too small for machine
@@ -217,7 +213,7 @@ int step(double *const restrict x,
     /* if error tolerance is too small, increase it to an acceptable value */
     round = 0.;
     for (l = 1; l <= neqn; ++l) {
-        round += pow(y[l] / wt[l], 2.0);
+        round += pow(y[l - 1] / wt[l - 1], 2.0);
     }
     round = 2.0 * DBL_EPSILON * sqrt(round);
     if (p5eps < round) {
@@ -229,13 +225,13 @@ int step(double *const restrict x,
     sig[0] = 1.;
     if (*start) {
         /* initialize.  compute appropriate step size for first step */
-        (*f)(f_ctx, *x, &y[1], &yp[1]);
+        (*f)(f_ctx, *x, &y[1 - 1], yp);
         {
             double sum = 0.;
             for (l = 1; l <= neqn; ++l) {
-                phi[l + neqn] = yp[l];
+                phi[l + neqn] = yp[l - 1];
                 phi[l + neqn * 2] = 0.;
-                sum += pow(yp[l] / wt[l], 2.0);
+                sum += pow(yp[l - 1] / wt[l - 1], 2.0);
             }
             sum = sqrt(sum);
             absh = fabs(*h);
@@ -342,7 +338,7 @@ int step(double *const restrict x,
         /**** end block 1 ****/
 
         /**** begin block 2 ****/
-        /* predict a solution p[], evaluate derivatives using predicted
+        /* predict a solution p, evaluate derivatives using predicted
            solution, estimate local error at order k and errors at orders k,
            k-1, k-2 as if constant step size were used. */
 
@@ -358,41 +354,41 @@ int step(double *const restrict x,
         for (l = 1; l <= neqn; ++l) {
             phi[l + kp2 * neqn] = phi[l + kp1 * neqn];
             phi[l + kp1 * neqn] = 0.;
-            p[l] = 0.;
+            p[l - 1] = 0.;
         }
         for (j = 1; j <= *k; ++j) {
             const int i = kp1 - j;
             const int ip1 = i + 1;
             const double temp2 = g[i - 1];
             for (l = 1; l <= neqn; ++l) {
-                p[l] += temp2 * phi[l + i * neqn];
+                p[l - 1] += temp2 * phi[l + i * neqn];
                 phi[l + i * neqn] += phi[l + ip1 * neqn];
             }
         }
         if (!*nornd) {
             for (l = 1; l <= neqn; ++l) {
-                const double tau = *h * p[l] - phi[l + neqn * 15];
-                p[l] = y[l] + tau;
-                phi[l + (neqn * 16)] = p[l] - y[l] - tau;
+                const double tau = *h * p[l - 1] - phi[l + neqn * 15];
+                p[l - 1] = y[l - 1] + tau;
+                phi[l + (neqn * 16)] = p[l - 1] - y[l - 1] - tau;
             }
         } else {
             for (l = 1; l <= neqn; ++l) {
-                p[l] = y[l] + *h * p[l];
+                p[l - 1] = y[l - 1] + *h * p[l - 1];
             }
         }
         {
             const double xold = *x;
             *x += *h;
             absh = fabs(*h);
-            (*f)(f_ctx, *x, &p[1], &yp[1]);
+            (*f)(f_ctx, *x, p, yp);
 
             /* estimate errors at orders k, k-1, k-2 */
             erkm2 = 0.;
             erkm1 = 0.;
             erk = 0.;
             for (l = 1; l <= neqn; ++l) {
-                const double temp3 = 1. / wt[l];
-                const double temp4 = yp[l] - phi[l + neqn];
+                const double temp3 = 1. / wt[l - 1];
+                const double temp4 = yp[l - 1] - phi[l + neqn];
                 if (km2 > 0) {
                     erkm2 += pow((phi[l + km1 * neqn] + temp4) * temp3, 2.0);
                 }
@@ -488,23 +484,22 @@ int step(double *const restrict x,
     if (!*nornd) {
         for (l = 1; l <= neqn; ++l) {
             const double rho =
-                temp1 * (yp[l] - phi[l + neqn]) -
+                temp1 * (yp[l - 1] - phi[l + neqn]) -
                 phi[l + (neqn * 16)];
-            y[l] = p[l] + rho;
-            phi[l + neqn * 15] = y[l] - p[l] - rho;
+            y[l - 1] = p[l - 1] + rho;
+            phi[l + neqn * 15] = y[l - 1] - p[l - 1] - rho;
         }
     } else {
         for (l = 1; l <= neqn; ++l) {
-            /* L415: */
-            y[l] = p[l] + temp1 * (yp[l] - phi[l + neqn]);
+            y[l - 1] = p[l - 1] + temp1 * (yp[l - 1] - phi[l + neqn]);
         }
     }
-    (*f)(f_ctx, *x, &y[1], &yp[1]);
+    (*f)(f_ctx, *x, y, yp);
 
     /* update differences for next step */
 
     for (l = 1; l <= neqn; ++l) {
-        phi[l + kp1 * neqn] = yp[l] - phi[l + neqn];
+        phi[l + kp1 * neqn] = yp[l - 1] - phi[l + neqn];
         phi[l + kp2 * neqn] = phi[l + kp1 * neqn] - phi[l + kp2 * neqn];
     }
     for (i = 1; i <= *k; ++i) {
@@ -530,7 +525,7 @@ int step(double *const restrict x,
         erk = erkm1;
     } else if (kp1 <= *ns) {
         for (l = 1; l <= neqn; ++l) {
-            erkp1 += pow(phi[l + kp2 * neqn] / wt[l], 2.0);
+            erkp1 += pow(phi[l + kp2 * neqn] / wt[l - 1], 2.0);
         }
         erkp1 = absh * gstr[kp1 - 1] * sqrt(erkp1);
 
