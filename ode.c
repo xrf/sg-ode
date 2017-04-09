@@ -279,11 +279,10 @@ int step(double *const restrict x,
             alpha[*ns - 1] = 1.0 / *ns;
             sig[nsp1 - 1] = 1.0;
             for (i = *ns; i < *k; ++i) {
-                const int im1 = i - 1;
-                const double temp2 = psi[im1];
-                psi[im1] = temp1;
-                beta[i] = beta[im1] * psi[im1] / temp2;
-                temp1 = temp2 + *h;
+                const double psiim1 = psi[i - 1];
+                psi[i - 1] = temp1;
+                beta[i] = beta[i - 1] * psi[i - 1] / psiim1;
+                temp1 = psiim1 + *h;
                 alpha[i] = *h / temp1;
                 sig[i + 1] = (double)(i + 1) * alpha[i] * sig[i];
             }
@@ -293,27 +292,24 @@ int step(double *const restrict x,
 
             /* initialize v and set w.  g[1] is set in data statement */
             if (*ns <= 1) {
-                for (iq = 1; iq <= *k; ++iq) {
-                    v[iq - 1] = 1.0 / (iq * (iq + 1));
-                    w[iq - 1] = v[iq - 1];
+                for (iq = 0; iq < *k; ++iq) {
+                    v[iq] = 1.0 / ((iq + 1) * (iq + 2));
+                    w[iq] = v[iq];
                 }
             } else {
                 /* if order was raised, update diagonal part of v */
                 if (*k > *kold) {
-                    const int nsm2 = *ns - 2;
                     v[*k - 1] = 1.0 / (*k * kp1);
-                    if (nsm2 >= 1) {
-                        for (j = 1; j <= nsm2; ++j) {
-                            int i = *k - j;
-                            v[i - 1] -= alpha[j] * v[i];
-                        }
+                    for (j = 1; j < *ns - 1; ++j) {
+                        const int i = *k - j;
+                        v[i - 1] -= alpha[j] * v[i];
                     }
                 }
                 /* update v and set w */
                 const double temp5 = alpha[*ns - 1];
-                for (iq = 1; iq <= kp1 - *ns; ++iq) {
-                    v[iq - 1] -= temp5 * v[iq];
-                    w[iq - 1] = v[iq - 1];
+                for (iq = 0; iq < kp1 - *ns; ++iq) {
+                    v[iq] -= temp5 * v[iq + 1];
+                    w[iq] = v[iq];
                 }
                 g[nsp1 - 1] = w[0];
             }
