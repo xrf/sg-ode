@@ -148,7 +148,7 @@ int step(double *const x,
          const fn_type f,
          void *const f_ctx,
          const int neqn,
-         double *const h__,
+         double *const h,
          double *const eps,
          double *wt,
          bool *const start,
@@ -213,8 +213,8 @@ int step(double *const x,
        step size. */
 
     /* if step size is too small, determine an acceptable one */
-    if (fabs(*h__) < 4.0 * DBL_EPSILON * fabs(*x)) {
-        *h__ = copysign(4.0 * DBL_EPSILON * fabs(*x), *h__);
+    if (fabs(*h) < 4.0 * DBL_EPSILON * fabs(*x)) {
+        *h = copysign(4.0 * DBL_EPSILON * fabs(*x), *h);
         return 1;
     }
     p5eps = *eps * .5;
@@ -243,11 +243,11 @@ int step(double *const x,
             sum += pow(yp[l] / wt[l], 2.0);
         }
         sum = sqrt(sum);
-        absh = fabs(*h__);
-        if (*eps < sum * 16. * *h__ * *h__) {
+        absh = fabs(*h);
+        if (*eps < sum * 16. * pow(*h, 2.0)) {
             absh = sqrt(*eps / sum) * .25;
         }
-        *h__ = copysign(max(absh, 4.0 * DBL_EPSILON * fabs(*x)), *h__);
+        *h = copysign(max(absh, 4.0 * DBL_EPSILON * fabs(*x)), *h);
         *hold = 0.;
         *k = 1;
         *kold = 0;
@@ -275,7 +275,7 @@ int step(double *const x,
 
         /* ns is the number of steps taken with size h, including the current
            one.  when k < ns, no coefficients change */
-        if (*h__ != *hold) {
+        if (*h != *hold) {
             *ns = 0;
         }
         if (*ns <= *kold) {
@@ -289,7 +289,7 @@ int step(double *const x,
             beta[*ns] = 1.;
             realns = (double)(*ns);
             alpha[*ns] = 1. / realns;
-            temp1 = *h__ * realns;
+            temp1 = *h * realns;
             sig[nsp1] = 1.;
             if (*k >= nsp1) {
                 const int i__1 = *k;
@@ -299,8 +299,8 @@ int step(double *const x,
                     temp2 = psi[im1];
                     psi[im1] = temp1;
                     beta[i] = beta[im1] * psi[im1] / temp2;
-                    temp1 = temp2 + *h__;
-                    alpha[i] = *h__ / temp1;
+                    temp1 = temp2 + *h;
+                    alpha[i] = *h / temp1;
                     reali = (double)i;
                     sig[i + 1] = reali * alpha[i] * sig[i];
                 }
@@ -390,18 +390,18 @@ int step(double *const x,
         }
         if (!*nornd) {
             for (l = 1; l <= neqn; ++l) {
-                tau = *h__ * p[l] - phi[l + neqn * 15];
+                tau = *h * p[l] - phi[l + neqn * 15];
                 p[l] = y[l] + tau;
                 phi[l + (neqn * 16)] = p[l] - y[l] - tau;
             }
         } else {
             for (l = 1; l <= neqn; ++l) {
-                p[l] = y[l] + *h__ * p[l];
+                p[l] = y[l] + *h * p[l];
             }
         }
         xold = *x;
-        *x += *h__;
-        absh = fabs(*h__);
+        *x += *h;
+        absh = fabs(*h);
         (*f)(f_ctx, *x, &p[1], &yp[1]);
 
         /* estimate errors at orders k, k-1, k-2 */
@@ -443,7 +443,7 @@ int step(double *const x,
 
         /* test if step successful */
         if (err <= *eps) {
-            goto L400;
+            break;
         }
         /**** end block 2 ****/
 
@@ -469,148 +469,115 @@ int step(double *const x,
             int i;
             const int i__1 = *k;
             for (i = 2; i <= i__1; ++i) {
-                psi[i - 1] = psi[i] - *h__;
+                psi[i - 1] = psi[i] - *h;
             }
         }
         /* on third failure, set order to one.  thereafter, use optimal step
            size */
         ++ifail;
         temp2 = .5;
-        if (ifail < 3) {
-            goto L335;
-        } else if (ifail == 3) {
-            goto L330;
+        if (ifail >= 3) {
+            if (ifail != 3 && p5eps < erk * .25) {
+                temp2 = sqrt(p5eps / erk);
+            }
+            knew = 1;
         }
-        if (p5eps < erk * .25) {
-            temp2 = sqrt(p5eps / erk);
-        }
-    L330:
-        knew = 1;
-    L335:
-        *h__ = temp2 * *h__;
+        *h = temp2 * *h;
         *k = knew;
-        if (fabs(*h__) < 4.0 * DBL_EPSILON * fabs(*x)) {
-            *h__ = copysign(4.0 * DBL_EPSILON * fabs(*x), *h__);
+        if (fabs(*h) < 4.0 * DBL_EPSILON * fabs(*x)) {
+            *h = copysign(4.0 * DBL_EPSILON * fabs(*x), *h);
             *eps += *eps;
             return 1;
         }
     }
-/*       ***     end block 3     *** */
+    /**** end block 3 ****/
 
-/*       ***     begin block 4     *** */
-/*   the step is successful.  correct the predicted solution, evaluate */
-/*   the derivatives using the corrected solution and update the */
-/*   differences.  determine best order and step size for next step. */
-/*                   *** */
-L400:
+    /**** begin block 4 ****/
+    /* the step is successful.  correct the predicted solution, evaluate the
+       derivatives using the corrected solution and update the differences.
+       determine best order and step size for next step. */
     *kold = *k;
-    *hold = *h__;
+    *hold = *h;
 
-    /*   correct and evaluate */
-
-    temp1 = *h__ * g[kp1];
-    if (*nornd) {
-        goto L410;
+    /* correct and evaluate */
+    temp1 = *h * g[kp1];
+    if (!*nornd) {
+        for (l = 1; l <= neqn; ++l) {
+            rho = temp1 * (yp[l] - phi[l + neqn]) - phi[l + (neqn * 16)];
+            y[l] = p[l] + rho;
+            phi[l + neqn * 15] = y[l] - p[l] - rho;
+        }
+    } else {
+        for (l = 1; l <= neqn; ++l) {
+            /* L415: */
+            y[l] = p[l] + temp1 * (yp[l] - phi[l + neqn]);
+        }
     }
-    for (l = 1; l <= neqn; ++l) {
-        rho = temp1 * (yp[l] - phi[l + neqn]) - phi[l + (neqn * 16)];
-        y[l] = p[l] + rho;
-        /* L405: */
-        phi[l + neqn * 15] = y[l] - p[l] - rho;
-    }
-    goto L420;
-L410:
-    for (l = 1; l <= neqn; ++l) {
-        /* L415: */
-        y[l] = p[l] + temp1 * (yp[l] - phi[l + neqn]);
-    }
-L420:
     (*f)(f_ctx, *x, &y[1], &yp[1]);
 
-    /*   update differences for next step */
+    /* update differences for next step */
 
     for (l = 1; l <= neqn; ++l) {
         phi[l + kp1 * neqn] = yp[l] - phi[l + neqn];
-        /* L425: */
         phi[l + kp2 * neqn] = phi[l + kp1 * neqn] - phi[l + kp2 * neqn];
     }
     i__1 = *k;
     for (i = 1; i <= i__1; ++i) {
         for (l = 1; l <= neqn; ++l) {
-            /* L430: */
             phi[l + i * neqn] += phi[l + kp1 * neqn];
         }
-        /* L435: */
     }
 
-    /*   estimate error at order k+1 unless: */
-    /*     in first phase when always raise order, */
-    /*     already decided to lower order, */
-    /*     step size not constant so estimate unreliable */
+    /* estimate error at order k+1 unless: in first phase when always raise
+       order, already decided to lower order, step size not constant so
+       estimate unreliable */
 
     erkp1 = 0.;
     if (knew == km1 || *k == 12) {
         *phase1 = false;
     }
+
     if (*phase1) {
-        goto L450;
-    }
-    if (knew == km1) {
-        goto L455;
-    }
-    if (kp1 > *ns) {
-        goto L460;
-    }
-    for (l = 1; l <= neqn; ++l) {
-        erkp1 += pow(phi[l + kp2 * neqn] / wt[l], 2.0);
-    }
-    erkp1 = absh * gstr[kp1 - 1] * sqrt(erkp1);
+        *k = kp1;
+        erk = erkp1;
+    } else if (knew == km1) {
+        *k = km1;
+        erk = erkm1;
+    } else if (kp1 <= *ns) {
+        for (l = 1; l <= neqn; ++l) {
+            erkp1 += pow(phi[l + kp2 * neqn] / wt[l], 2.0);
+        }
+        erkp1 = absh * gstr[kp1 - 1] * sqrt(erkp1);
 
-    /*   using estimated error at order k+1, determine appropriate order */
-    /*   for next step */
+        /* using estimated error at order k+1, determine appropriate order
+           for next step */
 
-    if (*k > 1) {
-        goto L445;
-    }
-    if (erkp1 >= erk * .5) {
-        goto L460;
-    }
-    goto L450;
-L445:
-    if (erkm1 <= min(erk, erkp1)) {
-        goto L455;
-    }
-    if (erkp1 >= erk || *k == 12) {
-        goto L460;
+        if (*k > 1) {
+            if (erkm1 <= min(erk, erkp1)) {
+                *k = km1;
+                erk = erkm1;
+            } else if (erkp1 < erk && *k != 12) {
+                *k = kp1;
+                erk = erkp1;
+            }
+        } else if (erkp1 < erk * .5) {
+            *k = kp1;
+            erk = erkp1;
+        }
     }
 
-    /* here erkp1 < erk < max(erkm1, erkm2) else order would have been lowered
-       in block 2.  thus order is to be raised */
-
-L450:
-    /* raise order */
-    *k = kp1;
-    erk = erkp1;
-    goto L460;
-
-L455:
-    /* lower order */
-    *k = km1;
-    erk = erkm1;
-
-L460:
     /* with new order determine appropriate step size for next step */
-    hnew = *h__ + *h__;
+    hnew = 2.0 * *h;
     if (!*phase1 && p5eps < erk * pow(2.0, *k + 1)) {
-        hnew = *h__;
+        hnew = *h;
         if (p5eps >= erk) {
             return 0;
         }
         temp2 = (double)(*k + 1);
         hnew = absh * max(0.5, min(0.9, pow(p5eps / erk, 1.0 / temp2)));
-        hnew = copysign(max(hnew, 4.0 * DBL_EPSILON * fabs(*x)), *h__);
+        hnew = copysign(max(hnew, 4.0 * DBL_EPSILON * fabs(*x)), *h);
     }
-    *h__ = hnew;
+    *h = hnew;
     /**** end block 4 ****/
     return 0;
 }
@@ -751,7 +718,7 @@ void de(const fn_type f,
         bool *const phase1,
         double *const psi,
         double *const x,
-        double *const h__,
+        double *const h,
         double *const hold,
         bool *const start,
         double *const told,
@@ -799,7 +766,7 @@ void de(const fn_type f,
             yy[l] = y[l];
         }
         *delsgn = copysign(1.0, del);
-        *h__ = copysign(max(fabs(tout - *x), 4.0 * DBL_EPSILON * fabs(*x)),
+        *h = copysign(max(fabs(tout - *x), 4.0 * DBL_EPSILON * fabs(*x)),
                         tout - *x);
     }
 
@@ -818,10 +785,10 @@ void de(const fn_type f,
         /* if cannot go past output point and sufficiently close, extrapolate and
            return */
         if (isn <= 0 || fabs(tout - *x) < 4.0 * DBL_EPSILON * fabs(*x)) {
-            *h__ = tout - *x;
+            *h = tout - *x;
             (*f)(f_ctx, *x, yy, yp);
             for (l = 0; l < neqn; ++l) {
-                y[l] = yy[l] + *h__ * yp[l];
+                y[l] = yy[l] + *h * yp[l];
             }
             *iflag = 2;
             *t = tout;
@@ -846,13 +813,13 @@ void de(const fn_type f,
         }
 
         /* limit step size, set weight vector and take a step */
-        *h__ = copysign(min(fabs(*h__), fabs(tend - *x)), *h__);
+        *h = copysign(min(fabs(*h), fabs(tend - *x)), *h);
         for (l = 0; l < neqn; ++l) {
             wt[l] = releps * fabs(yy[l]) + abseps;
         }
 
         /* test for tolerances too small */
-        if (step(x, yy, f, f_ctx, neqn, h__, &eps, wt, start, hold,
+        if (step(x, yy, f, f_ctx, neqn, h, &eps, wt, start, hold,
                  k, kold, phi, p, yp, psi, alpha, beta,
                  sig, v, w, g, phase1, ns, nornd)) {
             *iflag = isn * 3;
