@@ -1,6 +1,7 @@
 // origin: http://www.netlib.org/ode/ode.f
 // f2c'ed
 
+#include <assert.h>
 #include <float.h>
 #include <math.h>
 #include <stdbool.h>
@@ -17,6 +18,14 @@ static double min(double x, double y)
 static double max(double x, double y)
 {
     return x >= y ? x : y;
+}
+
+static void clear_double_array(double *a, size_t n) {
+    // compilers should be able to optimize this to a simple memcpy
+    size_t i;
+    for (i = 0; i < n; ++i) {
+        a[i] = 0.0;
+    }
 }
 
 /*
@@ -579,84 +588,56 @@ int step(double *const x,
   The remaining parameters are returned unaltered from their input values.
   Integration with `step` may be continued.
 */
-void intrp(double *const x,
-           double *y,
+void intrp(double *const restrict x,
+           double *const restrict y,
            const double xout,
-           double *yout,
-           double *ypout,
+           double *const restrict yout,
+           double *const restrict ypout,
            const int neqn,
-           int *const kold,
-           double *phi,
-           double *psi)
+           int *const restrict kold,
+           double *const restrict phi,
+           double *const restrict psi)
 {
-    /* Initialized data */
-    static double g[13] = {1.};
-    static double rho[13] = {1.};
+    const double hi = xout - *x;
+    const int ki = *kold + 1;
 
-    /* Local variables */
-    int i;
-    static int j, l;
-    static double w[13], hi;
-    static int ki, jm1;
-    static double eta;
-    static int kip1;
-    static double term, temp1, temp2, temp3, gamma;
-    static double psijm1;
-
-    /* Parameter adjustments */
-    phi -= 1 + neqn;
-    --ypout;
-    --yout;
-    --y;
-    --psi;
-
-    /* Function Body */
-
-    hi = xout - *x;
-    ki = *kold + 1;
-    kip1 = ki + 1;
+    int i, j, l;
+    double term = 0.0;
+    double g[13] = {1.0};
+    double rho[13] = {1.0};
+    double w[13] = {0.0};
 
     /* initialize w for computing g */
-    for (i = 1; i <= ki; ++i) {
-        temp1 = (double)i;
-        w[i - 1] = 1. / temp1;
+    assert(ki <= 13);
+    for (i = 0; i < ki; ++i) {
+        w[i] = 1.0 / (i + 1);
     }
-    term = 0.;
 
     /* compute g */
-
-    for (j = 2; j <= ki; ++j) {
-        int i;
-        int limit1;
-        jm1 = j - 1;
-        psijm1 = psi[jm1];
-        gamma = (hi + term) / psijm1;
-        eta = hi / psijm1;
-        limit1 = kip1 - j;
-        for (i = 1; i <= limit1; ++i) {
-            w[i - 1] = gamma * w[i - 1] - eta * w[i];
+    for (j = 1; j < ki; ++j) {
+        const double psijm1 = psi[j - 1];
+        const double gamma = (hi + term) / psijm1;
+        const double eta = hi / psijm1;
+        for (i = 0; i < ki - j; ++i) {
+            w[i] = gamma * w[i] - eta * w[i + 1];
         }
-        g[j - 1] = w[0];
-        rho[j - 1] = gamma * rho[jm1 - 1];
+        g[j] = w[0];
+        rho[j] = gamma * rho[j - 1];
         term = psijm1;
     }
 
     /* interpolate */
-    for (l = 1; l <= neqn; ++l) {
-        ypout[l] = 0.;
-        /* L20: */
-        yout[l] = 0.;
-    }
-    for (j = 1; j <= ki; ++j) {
-        int i = kip1 - j;
-        temp2 = g[i - 1];
-        temp3 = rho[i - 1];
-        for (l = 1; l <= neqn; ++l) {
+    clear_double_array(ypout, (size_t)neqn);
+    clear_double_array(yout, (size_t)neqn);
+    for (i = ki; i-- > 0;) {
+        const double temp2 = g[i];
+        const double temp3 = rho[i];
+        for (l = 0; l < neqn; ++l) {
             yout[l] += temp2 * phi[l + i * neqn];
             ypout[l] += temp3 * phi[l + i * neqn];
         }
     }
-    for (l = 1; l <= neqn; ++l) {
+    for (l = 0; l < neqn; ++l) {
         yout[l] = y[l] + hi * yout[l];
     }
 }
