@@ -177,7 +177,7 @@ int step(double *const restrict x,
          double *restrict yp,
          double *const restrict psi,
          double *restrict alpha,
-         double *restrict beta,
+         double *const restrict beta,
          double *restrict sig,
          double *restrict v,
          double *restrict w,
@@ -203,7 +203,6 @@ int step(double *const restrict x,
     --wt;
     --y;
     --alpha;
-    --beta;
     --sig;
     --v;
     --w;
@@ -288,7 +287,7 @@ int step(double *const restrict x,
             temp1 = *h * *ns;
             /* compute those components of alpha, beta, psi, sig which are
                changed */
-            beta[*ns] = 1.0;
+            beta[*ns - 1] = 1.0;
             alpha[*ns] = 1.0 / *ns;
             sig[nsp1] = 1.0;
             if (*k >= nsp1) {
@@ -296,7 +295,7 @@ int step(double *const restrict x,
                     const int im1 = i - 1;
                     const double temp2 = psi[im1 - 1];
                     psi[im1 - 1] = temp1;
-                    beta[i] = beta[im1] * psi[im1 - 1] / temp2;
+                    beta[i - 1] = beta[im1 - 1] * psi[im1 - 1] / temp2;
                     temp1 = temp2 + *h;
                     alpha[i] = *h / temp1;
                     sig[i + 1] = (double)i * alpha[i] * sig[i];
@@ -356,7 +355,7 @@ int step(double *const restrict x,
         if (*k >= nsp1) {
             for (i = nsp1; i <= *k; ++i) {
                 for (l = 1; l <= neqn; ++l) {
-                    phi[l + i * neqn] = beta[i] * phi[l + i * neqn];
+                    phi[l + i * neqn] = beta[i - 1] * phi[l + i * neqn];
                 }
             }
         }
@@ -450,7 +449,7 @@ int step(double *const restrict x,
             const int ip1 = i + 1;
             for (l = 1; l <= neqn; ++l) {
                 phi[l + i * neqn] =
-                    (1.0 / beta[i]) *
+                    (1.0 / beta[i - 1]) *
                     (phi[l + i * neqn] - phi[l + ip1 * neqn]);
             }
         }
