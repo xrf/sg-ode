@@ -178,7 +178,7 @@ int step(double *const restrict x,
          double *const restrict psi,
          double *const restrict alpha,
          double *const restrict beta,
-         double *restrict sig,
+         double *const restrict sig,
          double *restrict v,
          double *restrict w,
          double *restrict g,
@@ -202,7 +202,6 @@ int step(double *const restrict x,
     phi -= 1 + neqn;
     --wt;
     --y;
-    --sig;
     --v;
     --w;
     --g;
@@ -230,7 +229,7 @@ int step(double *const restrict x,
     }
     g[1] = 1.;
     g[2] = .5;
-    sig[1] = 1.;
+    sig[0] = 1.;
     if (*start) {
         /* initialize.  compute appropriate step size for first step */
         (*f)(f_ctx, *x, &y[1], &yp[1]);
@@ -288,7 +287,7 @@ int step(double *const restrict x,
                changed */
             beta[*ns - 1] = 1.0;
             alpha[*ns - 1] = 1.0 / *ns;
-            sig[nsp1] = 1.0;
+            sig[nsp1 - 1] = 1.0;
             if (*k >= nsp1) {
                 for (i = nsp1; i <= *k; ++i) {
                     const int im1 = i - 1;
@@ -297,7 +296,7 @@ int step(double *const restrict x,
                     beta[i - 1] = beta[im1 - 1] * psi[im1 - 1] / temp2;
                     temp1 = temp2 + *h;
                     alpha[i - 1] = *h / temp1;
-                    sig[i + 1] = (double)i * alpha[i - 1] * sig[i];
+                    sig[i] = (double)i * alpha[i - 1] * sig[i - 1];
                 }
             }
             psi[*k - 1] = temp1;
@@ -406,14 +405,14 @@ int step(double *const restrict x,
                 erk += pow(temp4 * temp3, 2.0);
             }
             if (km2 > 0) {
-                erkm2 = absh * sig[km1] * gstr[km2 - 1] * sqrt(erkm2);
+                erkm2 = absh * sig[km1 - 1] * gstr[km2 - 1] * sqrt(erkm2);
             }
             if (km2 >= 0) {
-                erkm1 = absh * sig[*k] * gstr[km1 - 1] * sqrt(erkm1);
+                erkm1 = absh * sig[*k - 1] * gstr[km1 - 1] * sqrt(erkm1);
             }
             const double temp5 = absh * sqrt(erk);
             err = temp5 * (g[*k] - g[kp1]);
-            erk = temp5 * sig[kp1] * gstr[*k - 1];
+            erk = temp5 * sig[kp1 - 1] * gstr[*k - 1];
             knew = *k;
 
             /* test if order should be lowered */
