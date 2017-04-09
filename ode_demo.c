@@ -34,6 +34,7 @@ void f(void *ctx, double t, const double *y, double *yp)
 
 int main(void)
 {
+    static const int maxnum = 500;
     double y[3], t, tout, work[163] = {0.0};
     int i;
     int iwork[5] = {0};
@@ -57,7 +58,8 @@ int main(void)
     for (i = 1; i <= 12; ++i) {
         tout = 5.0 * i;
     retry:
-        ode(f, NULL, &neqn, y, &t, &tout, &relerr, &abserr, &iflag, work, iwork);
+        ode(f, NULL, neqn, y, &t, tout, &relerr, &abserr,
+            &iflag, work, iwork, maxnum);
         dump();
         switch (iflag) {
         case 1:

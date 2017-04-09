@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include "ode.h"
 
+typedef void (*func_type)(void *, double, const double *, double *);
+
 static double min(double x, double y)
 {
     return x < y ? x : y;
@@ -17,15 +19,118 @@ static double max(double x, double y)
     return x >= y ? x : y;
 }
 
-int step(double *x, double *y, U_fp f, void *f_ctx, int *neqn,
+/*
+  Integrates a system of first order ordinary differential equations one step,
+  normally from `x` to `x+h`, using a modified divided difference form of the
+  Adams PECE formulas.  Local extrapolation is used to improve absolute
+  stability and accuracy.  The code adjusts its order and step size to control
+  the local error per unit step in a generalized sense.  Special devices are
+  included to control roundoff error and to detect when the user is requesting
+  too much accuracy.
+
+  @param x Independent variable
+  @param y Solution vector at `x` (length: `neqn`)
+  @param yp Derivative of solution vector at `x` after successful
+            step (length: `neqn`)
+  @param neqn Number of equations to be integrated
+  @param h Appropriate step size for next step.  Normally determined by
+           code
+  @param eps Local error tolerance.  Must be variable (length: `1`)
+  @param wt Vector of weights for error criterion (length: `neqn`)
+  @param start Boolean variable set `true` for first step, `false`
+               otherwise
+  @param hold Step size used for last successful step
+  @param k Appropriate order for next step (determined by code)
+  @param kold Order used for last successful step
+  @param crash Boolean variable set `true` when no step can be taken,
+               `false` otherwise.
+
+  The arrays `phi`, `psi` are required for the interpolation subroutine
+  `intrp`.  The array `p` is internal to the code.
+
+  # Input to `step`
+
+  ## First call
+
+  The user must provide storage in his driver program for all arrays in the
+  call list, namely
+
+      y[neqn], wt[neqn], phi[neqn * 16], p[neqn], yp[neqn], psi[12]
+
+  The user must also declare `start` and `crash` Boolean variables and `f` an
+  external subroutine, supply the subroutine `f(f_ctx, x, y, yp)` to evaluate
+
+      dy[i]/dx = yp[i] = f(x, y[0], y[1], ..., y[neqn - 1])
+
+  and initialize only the following parameters:
+
+      x -- initial value of the independent variable
+      y[] -- vector of initial values of dependent variables
+      neqn -- number of equations to be integrated
+      h -- nominal step size indicating direction of integration
+           and maximum size of step.  must be variable
+      eps -- local error tolerance per step.  must be variable
+      wt[] -- vector of non-zero weights for error criterion
+      start -- .true.
+
+  `step` requires the L2 norm of the vector with components
+  `local_error[l] / wt[l]` be less than `eps` for a successful step.  The
+  array `wt` allows the user to specify an error test appropriate for his
+  problem.  For example,
+
+      wt[l] = 1.0  specifies absolute error,
+            = fabs(y[l])  error relative to the most recent value of
+                          the l-th component of the solution,
+            = fabs(yp[l])  error relative to the most recent value of
+                           the l-th component of the derivative,
+            = max(wt[l], fabs(y[l]))  error relative to the largest magnitude
+                                      of l-th component obtained so far,
+            = fabs(y(l)) * relerr / eps + abserr / eps
+                 specifies a mixed relative-absolute test where relerr is
+                 relative error, abserr is absolute error and
+                 eps = max(relerr, abserr) .
+
+  ## Subsequent calls
+
+  Subroutine `step` is designed so that all information needed to continue the
+  integration, including the step size `h` and the order `k`, is returned with
+  each step.  With the exception of the step size, the error tolerance, and
+  the weights, none of the parameters should be altered.  The array `wt` must
+  be updated after each step to maintain relative error tests like those
+  above.  Normally the integration is continued just beyond the desired
+  endpoint and the solution interpolated there with subroutine `intrp`.  If it
+  is impossible to integrate beyond the endpoint, the step size may be reduced
+  to hit the endpoint since the code will not take a step larger than the `h`
+  input.  Changing the direction of integration, i.e., the sign of h ,
+  requires the user set `start = true` before calling `step` again.  This is
+  the only situation in which `start` should be altered.
+
+  # Output from `step`
+
+  ## Successful step
+
+  The subroutine returns after each successful step with `start` and `crash`
+  set to `false`.  `x` represents the independent variable advanced one step
+  of length hold from its value on input and `y` the solution vector at the
+  new value of `x`.  All other parameters represent information corresponding
+  to the new `x` needed to continue the integration.
+
+  ## unsuccessful step
+
+  When the error tolerance is too small for the machine precision, the
+  subroutine returns without taking a step and `crash = true`.  An appropriate
+  step size and error tolerance for continuing are estimated and all other
+  information is restored as upon input before returning.  To continue with
+  the larger tolerance, the user just calls the code again.  A restart is
+  neither required nor desirable.
+*/
+int step(double *x, double *y, func_type f, void *f_ctx, int neqn,
          double *h__, double *eps, double *wt, bool *start,
          double *hold, int *k, int *kold, bool *crash,
          double *phi, double *p, double *yp, double *psi,
          double *alpha, double *beta, double *sig, double *v,
          double *w, double *g, bool *phase1, int *ns, bool *nornd)
 {
-    /* Initialized data */
-
     static const double gstr[13] = {.5, .0833, .0417, .0264, .0188, .0143, .0114,
                                     .00936, .00789, .00679, .00592, .00524, .00468};
 
@@ -49,131 +154,10 @@ int step(double *x, double *y, U_fp f, void *f_ctx, int *neqn,
     static int limit1, limit2;
     static double realns;
 
-    /*    1  hold,k,kold,crash,phi,p,yp,psi) */
-
-    /*   double precision subroutine  step */
-    /*   integrates a system of first order ordinary */
-    /*   differential equations one step, normally from x to x+h, using a */
-    /*   modified divided difference form of the adams pece formulas.  local */
-    /*   extrapolation is used to improve absolute stability and accuracy. */
-    /*   the code adjusts its order and step size to control the local error */
-    /*   per unit step in a generalized sense.  special devices are included */
-    /*   to control roundoff error and to detect when the user is requesting */
-    /*   too much accuracy. */
-
-    /*   this code is completely explained and documented in the text, */
-    /*   computer solution of ordinary differential equations:  the initial */
-    /*   value problem  by l. f. shampine and m. k. gordon. */
-
-    /*   the parameters represent: */
-    /*      x -- independent variable             (real*8) */
-    /*      y(*) -- solution vector at x          (real*8) */
-    /*      yp(*) -- derivative of solution vector at  x  after successful */
-    /*           step                             (real*8) */
-    /*      neqn -- number of equations to be integrated (integer*4) */
-    /*      h -- appropriate step size for next step.  normally determined by */
-    /*           code                             (real*8) */
-    /*      eps -- local error tolerance.  must be variable  (real*8) */
-    /*      wt(*) -- vector of weights for error criterion   (real*8) */
-    /*      start -- logical variable set .true. for first step,  .false. */
-    /*           otherwise                        (logical*4) */
-    /*      hold -- step size used for last successful step  (real*8) */
-    /*      k -- appropriate order for next step (determined by code) */
-    /*      kold -- order used for last successful step */
-    /*      crash -- logical variable set .true. when no step can be taken, */
-    /*           .false. otherwise. */
-    /*   the arrays  phi, psi  are required for the interpolation subroutine */
-    /*   intrp.  the array p is internal to the code.  all are real*8 */
-
-    /*   input to  step */
-
-    /*      first call -- */
-
-    /*   the user must provide storage in his driver program for all arrays */
-    /*   in the call list, namely */
-
-    /*     dimension y(neqn),wt(neqn),phi(neqn,16),p(neqn),yp(neqn),psi(12) */
-
-    /*   the user must also declare  start  and  crash  logical variables */
-    /*   and  f  an external subroutine, supply the subroutine  f(x,y,yp) */
-    /*   to evaluate */
-    /*      dy(i)/dx = yp(i) = f(x,y(1),y(2),...,y(neqn)) */
-    /*   and initialize only the following parameters: */
-    /*      x -- initial value of the independent variable */
-    /*      y(*) -- vector of initial values of dependent variables */
-    /*      neqn -- number of equations to be integrated */
-    /*      h -- nominal step size indicating direction of integration */
-    /*           and maximum size of step.  must be variable */
-    /*      eps -- local error tolerance per step.  must be variable */
-    /*      wt(*) -- vector of non-zero weights for error criterion */
-    /*      start -- .true. */
-
-    /*   step  requires the l2 norm of the vector with components */
-    /*   local error(l)/wt(l)  be less than  eps  for a successful step.  the */
-    /*   array  wt  allows the user to specify an error test appropriate */
-    /*   for his problem.  for example, */
-    /*      wt(l) = 1.0  specifies absolute error, */
-    /*            = dabs(y(l))  error relative to the most recent value of */
-    /*                 the l-th component of the solution, */
-    /*            = dabs(yp(l))  error relative to the most recent value of */
-    /*                 the l-th component of the derivative, */
-    /*            = dmax1(wt(l),dabs(y(l)))  error relative to the largest */
-    /*                 magnitude of l-th component obtained so far, */
-    /*            = dabs(y(l))*relerr/eps + abserr/eps  specifies a mixed */
-    /*                 relative-absolute test where  relerr  is relative */
-    /*                 error,  abserr  is absolute error and  eps = */
-    /*                 dmax1(relerr,abserr) . */
-
-    /*      subsequent calls -- */
-
-    /*   subroutine  step  is designed so that all information needed to */
-    /*   continue the integration, including the step size  h  and the order */
-    /*   k , is returned with each step.  with the exception of the step */
-    /*   size, the error tolerance, and the weights, none of the parameters */
-    /*   should be altered.  the array  wt  must be updated after each step */
-    /*   to maintain relative error tests like those above.  normally the */
-    /*   integration is continued just beyond the desired endpoint and the */
-    /*   solution interpolated there with subroutine  intrp .  if it is */
-    /*   impossible to integrate beyond the endpoint, the step size may be */
-    /*   reduced to hit the endpoint since the code will not take a step */
-    /*   larger than the  h  input.  changing the direction of integration, */
-    /*   i.e., the sign of  h , requires the user set  start = .true. before */
-    /*   calling  step  again.  this is the only situation in which  start */
-    /*   should be altered. */
-
-    /*   output from  step */
-
-    /*      successful step -- */
-
-    /*   the subroutine returns after each successful step with  start  and */
-    /*   crash  set .false. .  x  represents the independent variable */
-    /*   advanced one step of length  hold  from its value on input and  y */
-    /*   the solution vector at the new value of  x .  all other parameters */
-    /*   represent information corresponding to the new  x  needed to */
-    /*   continue the integration. */
-
-    /*      unsuccessful step -- */
-
-    /*   when the error tolerance is too small for the machine precision, */
-    /*   the subroutine returns without taking a step and  crash = .true. . */
-    /*   an appropriate step size and error tolerance for continuing are */
-    /*   estimated and all other information is restored as upon input */
-    /*   before returning.  to continue with the larger tolerance, the user */
-    /*   just calls the code again.  a restart is neither required nor */
-    /*   desirable. */
-
-    /* *********************************************************************** */
-    /* *  the only machine dependent constants are based on the machine unit * */
-    /* *  roundoff error  u  which is the smallest positive number such that * */
-    /* *  1.0+u .gt. 1.0  .  the user must calculate  u  and insert          * */
-    /* *  twou=2.0*u  and  fouru=4.0*u  in the data statement before calling * */
-    /* *  the code.  the routine  machin  calculates  u .                    * */
-    /*     data twou,fouru/.444d-15,.888d-15/                                *** */
-    /* *********************************************************************** */
     /* Parameter adjustments */
     --yp;
     --p;
-    phi_dim1 = *neqn;
+    phi_dim1 = neqn;
     phi_offset = 1 + phi_dim1;
     phi -= phi_offset;
     --wt;
@@ -200,19 +184,17 @@ int step(double *x, double *y, U_fp f, void *f_ctx, int *neqn,
     /*   if step size is too small, determine an acceptable one */
 
     *crash = true;
-    if (fabs(*h__) >= fouru * fabs(*x)) {
-        goto L5;
+    if (fabs(*h__) < fouru * fabs(*x)) {
+        d__1 = fouru * fabs(*x);
+        *h__ = copysign(d__1, *h__);
+        return 0;
     }
-    d__1 = fouru * fabs(*x);
-    *h__ = copysign(d__1, *h__);
-    return 0;
-L5:
     p5eps = *eps * .5;
 
     /*   if error tolerance is too small, increase it to an acceptable value */
 
     round = 0.;
-    i__1 = *neqn;
+    i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
         /* L10: */
         /* Computing 2nd power */
@@ -238,7 +220,7 @@ L15:
 
     (*f)(f_ctx, *x, &y[1], &yp[1]);
     sum = 0.;
-    i__1 = *neqn;
+    i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
         phi[l + phi_dim1] = yp[l];
         phi[l + (phi_dim1 << 1)] = 0.;
@@ -266,7 +248,7 @@ L15:
         goto L99;
     }
     *nornd = false;
-    i__1 = *neqn;
+    i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
         /* L25: */
         phi[l + phi_dim1 * 15] = 0.;
@@ -410,7 +392,7 @@ L199:
     i__1 = *k;
     for (i__ = nsp1; i__ <= i__1; ++i__) {
         temp1 = beta[i__];
-        i__2 = *neqn;
+        i__2 = neqn;
         for (l = 1; l <= i__2; ++l) {
             /* L205: */
             phi[l + i__ * phi_dim1] = temp1 * phi[l + i__ * phi_dim1];
@@ -421,7 +403,7 @@ L199:
 /*   predict solution and differences */
 
 L215:
-    i__1 = *neqn;
+    i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
         phi[l + kp2 * phi_dim1] = phi[l + kp1 * phi_dim1];
         phi[l + kp1 * phi_dim1] = 0.;
@@ -433,7 +415,7 @@ L215:
         i__ = kp1 - j;
         ip1 = i__ + 1;
         temp2 = g[i__];
-        i__2 = *neqn;
+        i__2 = neqn;
         for (l = 1; l <= i__2; ++l) {
             p[l] += temp2 * phi[l + i__ * phi_dim1];
             /* L225: */
@@ -444,7 +426,7 @@ L215:
     if (*nornd) {
         goto L240;
     }
-    i__1 = *neqn;
+    i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
         tau = *h__ * p[l] - phi[l + phi_dim1 * 15];
         p[l] = y[l] + tau;
@@ -453,7 +435,7 @@ L215:
     }
     goto L250;
 L240:
-    i__1 = *neqn;
+    i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
         /* L245: */
         p[l] = y[l] + *h__ * p[l];
@@ -469,7 +451,7 @@ L250:
     erkm2 = 0.;
     erkm1 = 0.;
     erk = 0.;
-    i__1 = *neqn;
+    i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
         temp3 = 1. / wt[l];
         temp4 = yp[l] - phi[l + phi_dim1];
@@ -553,7 +535,7 @@ L299:
     for (i__ = 1; i__ <= i__1; ++i__) {
         temp1 = 1. / beta[i__];
         ip1 = i__ + 1;
-        i__2 = *neqn;
+        i__2 = neqn;
         for (l = 1; l <= i__2; ++l) {
             /* L305: */
             phi[l + i__ * phi_dim1] = temp1 * (phi[l + i__ * phi_dim1] - phi[l + ip1 * phi_dim1]);
@@ -618,7 +600,7 @@ L400:
     if (*nornd) {
         goto L410;
     }
-    i__1 = *neqn;
+    i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
         rho = temp1 * (yp[l] - phi[l + phi_dim1]) - phi[l + (phi_dim1 << 4)];
         y[l] = p[l] + rho;
@@ -627,7 +609,7 @@ L400:
     }
     goto L420;
 L410:
-    i__1 = *neqn;
+    i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
         /* L415: */
         y[l] = p[l] + temp1 * (yp[l] - phi[l + phi_dim1]);
@@ -637,7 +619,7 @@ L420:
 
     /*   update differences for next step */
 
-    i__1 = *neqn;
+    i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
         phi[l + kp1 * phi_dim1] = yp[l] - phi[l + phi_dim1];
         /* L425: */
@@ -645,7 +627,7 @@ L420:
     }
     i__1 = *k;
     for (i__ = 1; i__ <= i__1; ++i__) {
-        i__2 = *neqn;
+        i__2 = neqn;
         for (l = 1; l <= i__2; ++l) {
             /* L430: */
             phi[l + i__ * phi_dim1] += phi[l + kp1 * phi_dim1];
@@ -671,7 +653,7 @@ L420:
     if (kp1 > *ns) {
         goto L460;
     }
-    i__1 = *neqn;
+    i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
         /* L440: */
         /* Computing 2nd power */
@@ -743,10 +725,32 @@ L465:
     *h__ = hnew;
     return 0;
     /*       ***     end block 4     *** */
-} /* step_ */
+}
 
-int intrp(double *x, double *y, double *xout,
-          double *yout, double *ypout, int *neqn, int *kold,
+/*
+  The methods in subroutine `step` approximate the solution near `x` by a
+  polynomial.  Subroutine `intrp` approximates the solution at `xout` by
+  evaluating the polynomial there.  Information defining this polynomial is
+  passed from `step` so `intrp` cannot be used alone.
+
+  # Input to `intrp`
+
+  The user provides storage in the calling program for the arrays in the call
+  list and defines `xout`, point at which solution is desired.
+
+  The remaining parameters are defined in `step` and passed to `intrp` from
+  that subroutine.
+
+  # Output from `intrp`
+
+      yout[] -- Solution at `xout`
+      ypout[] -- Derivative of solution at `xout`
+
+  The remaining parameters are returned unaltered from their input values.
+  Integration with `step` may be continued.
+*/
+int intrp(double *x, double *y, double xout,
+          double *yout, double *ypout, int neqn, int *kold,
           double *phi, double *psi)
 {
     /* Initialized data */
@@ -767,34 +771,8 @@ int intrp(double *x, double *y, double *xout,
     static int limit1;
     static double psijm1;
 
-    /*   the methods in subroutine  step  approximate the solution near  x */
-    /*   by a polynomial.  subroutine  intrp  approximates the solution at */
-    /*   xout  by evaluating the polynomial there.  information defining this */
-    /*   polynomial is passed from  step  so  intrp  cannot be used alone. */
-
-    /*   this code is completely explained and documented in the text, */
-    /*   computer solution of ordinary differential equations:  the initial */
-    /*   value problem  by l. f. shampine and m. k. gordon. */
-
-    /*   input to intrp -- */
-
-    /*   all floating point variables are double precision */
-    /*   the user provides storage in the calling program for the arrays in */
-    /*   the call list */
-    /*   and defines */
-    /*      xout -- point at which solution is desired. */
-    /*   the remaining parameters are defined in  step  and passed to  intrp */
-    /*   from that subroutine */
-
-    /*   output from  intrp -- */
-
-    /*      yout(*) -- solution at  xout */
-    /*      ypout(*) -- derivative of solution at  xout */
-    /*   the remaining parameters are returned unaltered from their input */
-    /*   values.  integration with  step  may be continued. */
-
     /* Parameter adjustments */
-    phi_dim1 = *neqn;
+    phi_dim1 = neqn;
     phi_offset = 1 + phi_dim1;
     phi -= phi_offset;
     --ypout;
@@ -804,7 +782,7 @@ int intrp(double *x, double *y, double *xout,
 
     /* Function Body */
 
-    hi = *xout - *x;
+    hi = xout - *x;
     ki = *kold + 1;
     kip1 = ki + 1;
 
@@ -840,7 +818,7 @@ int intrp(double *x, double *y, double *xout,
 
     /*   interpolate */
 
-    i__1 = *neqn;
+    i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
         ypout[l] = 0.;
         /* L20: */
@@ -851,7 +829,7 @@ int intrp(double *x, double *y, double *xout,
         i__ = kip1 - j;
         temp2 = g[i__ - 1];
         temp3 = rho[i__ - 1];
-        i__2 = *neqn;
+        i__2 = neqn;
         for (l = 1; l <= i__2; ++l) {
             yout[l] += temp2 * phi[l + i__ * phi_dim1];
             /* L25: */
@@ -859,7 +837,7 @@ int intrp(double *x, double *y, double *xout,
         }
         /* L30: */
     }
-    i__1 = *neqn;
+    i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
         /* L35: */
         yout[l] = y[l] + hi * yout[l];
@@ -867,23 +845,23 @@ int intrp(double *x, double *y, double *xout,
     return 0;
 }
 
-int de(U_fp f, void *f_ctx, int *neqn, double *y, double *t,
-       double *tout, double *relerr, double *abserr, int *
-                                                         iflag,
+/*
+  `ode` merely allocates storage for `de` to relieve the user of the
+  inconvenience of a long call list.  Consequently `de` is used as described
+  in the comments for `ode` .
+
+  The constant `maxnum` is the maximum number of steps allowed in one call to
+  `de`.
+*/
+int de(func_type f, void *f_ctx, int neqn, double *y, double *t,
+       double tout, double *relerr, double *abserr, int *iflag,
        double *yy, double *wt, double *p, double *yp,
-       double *ypout, double *phi, double *alpha, double *
-                                                      beta,
+       double *ypout, double *phi, double *alpha, double *beta,
        double *sig, double *v, double *w, double *g,
        bool *phase1, double *psi, double *x, double *h__,
-       double *hold, bool *start, double *told, double *
-                                                    delsgn,
-       int *ns, bool *nornd, int *k, int *kold,
-       int *isnold)
+       double *hold, bool *start, double *told, double *delsgn,
+       int *ns, bool *nornd, int *k, int *kold, int *isnold, int maxnum)
 {
-    /* Initialized data */
-
-    static const int maxnum = 500;
-
     /* System generated locals */
     int phi_dim1, phi_offset, i__1;
     double d__1, d__2, d__3, d__4, d__5;
@@ -897,29 +875,8 @@ int de(U_fp f, void *f_ctx, int *neqn, double *y, double *t,
     static double fouru, absdel, abseps, releps;
     static int nostep;
 
-    /*   ode  merely allocates storage for  de  to relieve the user of the */
-    /*   inconvenience of a long call list.  consequently  de  is used as */
-    /*   described in the comments for  ode . */
-
-    /*   this code is completely explained and documented in the text, */
-    /*   computer solution of ordinary differential equations:  the initial */
-    /*   value problem  by l. f. shampine and m. k. gordon. */
-
-    /* *********************************************************************** */
-    /* *  the only machine dependent constant is based on the machine unit   * */
-    /* *  roundoff error  u  which is the smallest positive number such that * */
-    /* *  1.0+u .gt. 1.0 .  u  must be calculated and  fouru=4.0*u  inserted * */
-    /* *  in the following data statement before using  de .  the routine    * */
-    /* *  machin  calculates  u .  fouru  and  twou=2.0*u  must also be      * */
-    /* *  inserted in subroutine  step  before calling  de .                 * */
-    /*     data fouru/.888d-15/                                              *** */
-    /* *********************************************************************** */
-
-    /*   the constant  maxnum  is the maximum number of steps allowed in one */
-    /*   call to  de .  the user may change this limit by altering the */
-    /*   following statement */
     /* Parameter adjustments */
-    phi_dim1 = *neqn;
+    phi_dim1 = neqn;
     phi_offset = 1 + phi_dim1;
     phi -= phi_offset;
     --ypout;
@@ -942,10 +899,10 @@ int de(U_fp f, void *f_ctx, int *neqn, double *y, double *t,
     /*   test for improper parameters */
 
     fouru = 4.f * DBL_EPSILON;
-    if (*neqn < 1) {
+    if (neqn < 1) {
         goto L10;
     }
-    if (*t == *tout) {
+    if (*t == tout) {
         goto L10;
     }
     if (*relerr < 0. || *abserr < 0.) {
@@ -982,11 +939,11 @@ L10:
 /*   subroutine  step */
 
 L20:
-    del = *tout - *t;
+    del = tout - *t;
     absdel = fabs(del);
     tend = *t + del * 10.;
     if (isn < 0) {
-        tend = *tout;
+        tend = tout;
     }
     nostep = 0;
     kle4 = 0;
@@ -1009,16 +966,16 @@ L20:
 L30:
     *start = true;
     *x = *t;
-    i__1 = *neqn;
+    i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
         /* L40: */
         yy[l] = y[l];
     }
     *delsgn = copysign(1.0, del);
     /* Computing MAX */
-    d__3 = (d__1 = *tout - *x, fabs(d__1)), d__4 = fouru * fabs(*x);
+    d__3 = (d__1 = tout - *x, fabs(d__1)), d__4 = fouru * fabs(*x);
     d__2 = max(d__3, d__4);
-    d__5 = *tout - *x;
+    d__5 = tout - *x;
     *h__ = copysign(d__2, d__5);
 
 /*   if already past output point, interpolate and return */
@@ -1029,7 +986,7 @@ L50:
     }
     intrp(x, &yy[1], tout, &y[1], &ypout[1], neqn, kold, &phi[phi_offset], &psi[1]);
     *iflag = 2;
-    *t = *tout;
+    *t = tout;
     *told = *t;
     *isnold = isn;
     return 0;
@@ -1038,18 +995,18 @@ L50:
 /*   extrapolate and return */
 
 L60:
-    if (isn > 0 || (d__1 = *tout - *x, fabs(d__1)) >= fouru * fabs(*x)) {
+    if (isn > 0 || (d__1 = tout - *x, fabs(d__1)) >= fouru * fabs(*x)) {
         goto L80;
     }
-    *h__ = *tout - *x;
+    *h__ = tout - *x;
     (*f)(f_ctx, *x, &yy[1], &yp[1]);
-    i__1 = *neqn;
+    i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
         /* L70: */
         y[l] = yy[l] + *h__ * yp[l];
     }
     *iflag = 2;
-    *t = *tout;
+    *t = tout;
     *told = *t;
     *isnold = isn;
     return 0;
@@ -1064,7 +1021,7 @@ L80:
     if (stiff) {
         *iflag = isn * 5;
     }
-    i__1 = *neqn;
+    i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
         /* L90: */
         y[l] = yy[l];
@@ -1081,7 +1038,7 @@ L100:
     d__3 = fabs(*h__), d__4 = (d__1 = tend - *x, fabs(d__1));
     d__2 = min(d__3, d__4);
     *h__ = copysign(d__2, *h__);
-    i__1 = *neqn;
+    i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
         /* L110: */
         wt[l] = releps * (d__1 = yy[l], fabs(d__1)) + abseps;
@@ -1096,7 +1053,7 @@ L100:
     *iflag = isn * 3;
     *relerr = eps * releps;
     *abserr = eps * abseps;
-    i__1 = *neqn;
+    i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
         /* L120: */
         y[l] = yy[l];
@@ -1120,10 +1077,145 @@ L130:
     goto L50;
 }
 
-int ode(U_fp f, void *f_ctx, int *neqn, double *y, double *t,
-        double *tout, double *relerr, double *abserr, int *
-                                                          iflag,
-        double *work, int *iwork)
+/*
+  Integrates a system of `neqn` first order ordinary differential equations of
+  the form:
+
+      dy[i]/dt = f(t, y[0], y[1], ..., y[neqn - 1])
+      y[i] given at `t`
+
+  The subroutine integrates from `t` to `tout`.  On return the parameters in
+  the call list are set for continuing the integration.  The user has only to
+  define a new value `tout` and call `ode` again.
+
+  The differential equations are actually solved by a suite of codes `de`,
+  `step`, and `intrp`.  `ode` allocates virtual storage in the arrays `work`
+  and `iwork` and calls `de`.  `de` is a supervisor which directs the
+  solution.  It calls on the routines `step` and `intrp` to advance the
+  integration and to interpolate at output points.  `step` uses a modified
+  divided difference form of the Adams PECE formulas and local extrapolation.
+  It adjusts the order and step size to control the local error per unit step
+  in a generalized sense.  Normally each call to `step` advances the solution
+  one step in the direction of `tout`.  For reasons of efficiency `de`
+  integrates beyond `tout` internally, though never beyond
+  `t + 10 * (tout - t)`, and calls `intrp` to interpolate the solution at
+  `tout`.  An option is provided to stop the integration at `tout` but it
+  should be used only if it is impossible to continue the integration beyond
+  `tout`.
+
+  This code is completely explained and documented in the text, Computer
+  Solution of Ordinary Differential Equations: The Initial Value Problem
+  L. F. Shampine and M. K. Gordon.
+
+  @param f
+  Subroutine `f(f_ctx, t, y, yp)` to evaluate derivatives `yp[i] = dy[i]/dt`
+
+  @param neqn
+  Number of equations to be integrated
+
+  @param y
+  Solution vector at `t` (length: `neqn`)
+
+  @param t
+  Independent variable (length: `1`)
+
+  @param tout
+  Point at which solution is desired
+
+  @param relerr
+  Relative error tolerance for local error test (length: `1`).
+  At each step the code requires
+  `fabs(local_error) <= fabs(y) * relerr + abserr`
+  for each component of the local error and solution vectors
+
+  @param abserr
+  Absolute error tolerance for local error test (length: `1`).
+  See `relerr`.
+
+  @param iflag
+  Indicates status of integration
+
+  @param work
+  Arrays to hold information internal to `de` which is necessary for
+  subsequent calls (length: `100 + 21 * neqn`)
+
+  @param iwork
+  Arrays to hold information internal to `de` which is necessary for
+  subsequent calls (length: `5`)
+
+  # First call to `ode`
+
+  The user must provide storage in his calling program for the arrays
+  in the call list,
+
+      y[neqn], work[100 + 21 * neqn], iwork[5],
+
+  Supply supply the subroutine `f(f_ctx, t, y, yp)` to evaluate
+
+      dy[i]/dt = yp[i] = f(t, y[0], y[1], ..., y[neqn - 1])
+
+  and initialize the parameters:
+
+      `neqn` -- number of equations to be integrated
+      `y[]` -- vector of initial conditions
+      `t` -- starting point of integration
+      `tout` -- point at which solution is desired
+      `relerr, abserr` -- relative and absolute local error tolerances
+      `iflag` -- +1,-1.  indicator to initialize the code.  normal input
+           is +1.  the user should set iflag=-1 only if it is
+           impossible to continue the integration beyond `tout`.
+
+  All parameters except `f`, `neqn` and `tout`  may be altered by the
+  code on output so must be variables in the calling program.
+
+  # Output from `ode`
+
+      `neqn` -- unchanged
+      `y[]` -- solution at `t`
+      `t` -- last point reached in integration.  normal return has
+           `t == tout`.
+      `tout` -- unchanged
+      `relerr`, `abserr` -- normal return has tolerances unchanged.  `iflag=3`
+           signals tolerances increased
+      iflag = 2 -- normal return.  integration reached  tout
+            = 3 -- integration did not reach  tout  because error
+                   tolerances too small.  relerr ,  abserr  increased
+                   appropriately for continuing
+            = 4 -- integration did not reach  tout  because more than
+                   500 steps needed
+            = 5 -- integration did not reach  tout  because equations
+                   appear to be stiff
+            = 6 -- invalid input parameters (fatal error)
+           the value of  iflag  is returned negative when the input
+           value is negative and the integration does not reach  tout ,
+           i.e., -3, -4, -5.
+      work[], iwork[] -- information generally of no interest to the
+           user but necessary for subsequent calls.
+
+  # Subsequent calls to `ode`
+
+  Subroutine `ode` returns with all information needed to continue the
+  integration.  If the integration reached `tout`, the user need only define a
+  new `tout` and call again.  If the integration did not reach `tout` and the
+  user wants to continue, he just calls again.  The output value of `iflag` is
+  the appropriate input value for subsequent calls.  The only situation in
+  which it should be altered is to stop the integration internally at the new
+  `tout`, i.e., change output `iflag=2` to input `iflag=-2`.  Error tolerances
+  may be changed by the user before continuing.  All other parameters must
+  remain unchanged.
+*/
+int ode(const func_type f,
+        void *const f_ctx,
+        const int neqn,
+        double *y,
+        double *const t,
+        const double tout,
+        double *const relerr,
+        double *const abserr,
+        int *const iflag,
+        double *work,
+        int *iwork,
+        const int maxnum)
 {
     static const int ialpha = 1;
     static const int ih = 89;
@@ -1144,111 +1236,6 @@ int ode(U_fp f, void *f_ctx, int *neqn, double *y, double *t,
     static bool nornd, start, phase1;
     static int iypout;
 
-    /*   double precision subroutine ode integrates a system of neqn */
-    /*   first order ordinary differential equations of the form: */
-    /*             dy(i)/dt = f(t,y(1),y(2),...,y(neqn)) */
-    /*             y(i) given at  t . */
-    /*   the subroutine integrates from  t  to  tout .  on return the */
-    /*   parameters in the call list are set for continuing the integration. */
-    /*   the user has only to define a new value  tout  and call  ode  again. */
-
-    /*   the differential equations are actually solved by a suite of codes */
-    /*   de ,  step , and  intrp .  ode  allocates virtual storage in the */
-    /*   arrays  work  and  iwork  and calls  de .  de  is a supervisor which */
-    /*   directs the solution.  it calls on the routines  step  and  intrp */
-    /*   to advance the integration and to interpolate at output points. */
-    /*   step  uses a modified divided difference form of the adams pece */
-    /*   formulas and local extrapolation.  it adjusts the order and step */
-    /*   size to control the local error per unit step in a generalized */
-    /*   sense.  normally each call to  step  advances the solution one step */
-    /*   in the direction of  tout .  for reasons of efficiency  de */
-    /*   integrates beyond  tout  internally, though never beyond */
-    /*   t+10*(tout-t), and calls  intrp  to interpolate the solution at */
-    /*   tout .  an option is provided to stop the integration at  tout  but */
-    /*   it should be used only if it is impossible to continue the */
-    /*   integration beyond  tout . */
-
-    /*   this code is completely explained and documented in the text, */
-    /*   computer solution of ordinary differential equations:  the initial */
-    /*   value problem  by l. f. shampine and m. k. gordon. */
-
-    /*   the parameters represent: */
-    /*      f -- double precision subroutine f(t,y,yp) to evaluate */
-    /*                derivatives yp(i)=dy(i)/dt */
-    /*      neqn -- number of equations to be integrated (integer*4) */
-    /*      y(*) -- solution vector at t                 (real*8) */
-    /*      t -- independent variable                    (real*8) */
-    /*      tout -- point at which solution is desired   (real*8) */
-    /*      relerr,abserr -- relative and absolute error tolerances for local */
-    /*           error test (real*8).  at each step the code requires */
-    /*             dabs(local error) .le. dabs(y)*relerr + abserr */
-    /*           for each component of the local error and solution vectors */
-    /*      iflag -- indicates status of integration     (integer*4) */
-    /*      work(*)  (real*8)  -- arrays to hold information internal to */
-    /*      iwork(*) (integer*4)    which is necessary for subsequent calls */
-
-    /*   first call to ode -- */
-
-    /*   the user must provide storage in his calling program for the arrays */
-    /*   in the call list, */
-    /*      y(neqn), work(100+21*neqn), iwork(5), */
-    /*   declare  f  in an external statement, supply the double precision */
-    /*   subroutine f(t,y,yp)  to evaluate */
-    /*      dy(i)/dt = yp(i) = f(t,y(1),y(2),...,y(neqn)) */
-    /*   and initialize the parameters: */
-    /*      neqn -- number of equations to be integrated */
-    /*      y(*) -- vector of initial conditions */
-    /*      t -- starting point of integration */
-    /*      tout -- point at which solution is desired */
-    /*      relerr,abserr -- relative and absolute local error tolerances */
-    /*      iflag -- +1,-1.  indicator to initialize the code.  normal input */
-    /*           is +1.  the user should set iflag=-1 only if it is */
-    /*           impossible to continue the integration beyond  tout . */
-    /*   all parameters except  f ,  neqn  and  tout  may be altered by the */
-    /*   code on output so must be variables in the calling program. */
-
-    /*   output from  ode  -- */
-
-    /*      neqn -- unchanged */
-    /*      y(*) -- solution at  t */
-    /*      t -- last point reached in integration.  normal return has */
-    /*           t = tout . */
-    /*      tout -- unchanged */
-    /*      relerr,abserr -- normal return has tolerances unchanged.  iflag=3 */
-    /*           signals tolerances increased */
-    /*      iflag = 2 -- normal return.  integration reached  tout */
-    /*            = 3 -- integration did not reach  tout  because error */
-    /*                   tolerances too small.  relerr ,  abserr  increased */
-    /*                   appropriately for continuing */
-    /*            = 4 -- integration did not reach  tout  because more than */
-    /*                   500 steps needed */
-    /*            = 5 -- integration did not reach  tout  because equations */
-    /*                   appear to be stiff */
-    /*            = 6 -- invalid input parameters (fatal error) */
-    /*           the value of  iflag  is returned negative when the input */
-    /*           value is negative and the integration does not reach  tout , */
-    /*           i.e., -3, -4, -5. */
-    /*      work(*),iwork(*) -- information generally of no interest to the */
-    /*           user but necessary for subsequent calls. */
-
-    /*   subsequent calls to  ode -- */
-
-    /*   subroutine  ode  returns with all information needed to continue */
-    /*   the integration.  if the integration reached  tout , the user need */
-    /*   only define a new  tout  and call again.  if the integration did not */
-    /*   reach  tout  and the user wants to continue, he just calls again. */
-    /*   the output value of  iflag  is the appropriate input value for */
-    /*   subsequent calls.  the only situation in which it should be altered */
-    /*   is to stop the integration internally at the new  tout , i.e., */
-    /*   change output  iflag=2  to input  iflag=-2 .  error tolerances may */
-    /*   be changed by the user before continuing.  all other parameters must */
-    /*   remain unchanged. */
-
-    /* *********************************************************************** */
-    /* *  subroutines  de  and  step  contain machine dependent constants. * */
-    /* *  be sure they are set before using  ode .                          * */
-    /* *********************************************************************** */
-
     /* Parameter adjustments */
     --y;
     --work;
@@ -1256,11 +1243,11 @@ int ode(U_fp f, void *f_ctx, int *neqn, double *y, double *t,
 
     /* Function Body */
     iyy = 100;
-    iwt = iyy + *neqn;
-    ip = iwt + *neqn;
-    iyp = ip + *neqn;
-    iypout = iyp + *neqn;
-    iphi = iypout + *neqn;
+    iwt = iyy + neqn;
+    ip = iwt + neqn;
+    iyp = ip + neqn;
+    iypout = iyp + neqn;
+    iphi = iypout + neqn;
     if (abs(*iflag) == 1) {
         goto L1;
     }
@@ -1268,7 +1255,7 @@ int ode(U_fp f, void *f_ctx, int *neqn, double *y, double *t,
     phase1 = work[iphase] > 0.;
     nornd = iwork[2] != -1;
 L1:
-    de(f, f_ctx, neqn, &y[1], t, tout, relerr, abserr, iflag, &work[iyy], &work[iwt], &work[ip], &work[iyp], &work[iypout], &work[iphi], &work[ialpha], &work[ibeta], &work[isig], &work[iv], &work[iw], &work[ig], &phase1, &work[ipsi], &work[ix], &work[ih], &work[ihold], &start, &work[itold], &work[idelsn], &iwork[1], &nornd, &iwork[3], &iwork[4], &iwork[5]);
+    de(f, f_ctx, neqn, &y[1], t, tout, relerr, abserr, iflag, &work[iyy], &work[iwt], &work[ip], &work[iyp], &work[iypout], &work[iphi], &work[ialpha], &work[ibeta], &work[isig], &work[iv], &work[iw], &work[ig], &phase1, &work[ipsi], &work[ix], &work[ih], &work[ihold], &start, &work[itold], &work[idelsn], &iwork[1], &nornd, &iwork[3], &iwork[4], &iwork[5], maxnum);
     work[istart] = -1.;
     if (start) {
         work[istart] = 1.;

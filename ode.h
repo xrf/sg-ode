@@ -4,12 +4,10 @@
 extern "C" {
 #endif
 
-// TODO: remove this alias
-typedef void (*U_fp)(void *, double, const double *, double *);
-
-int ode(U_fp f, void *f_ctx, int *neqn, double *y, double *t,
-        double *tout, double *relerr, double *abserr, int *
-        iflag, double *work, int *iwork);
+int ode(void (*f)(void *f_ctx, double t, const double *y, double *yp),
+        void *f_ctx, int neqn, double *y, double *t,
+        double tout, double *relerr, double *abserr, int *
+        iflag, double *work, int *iwork, int maxnum);
 
 #ifdef __cplusplus
 }
