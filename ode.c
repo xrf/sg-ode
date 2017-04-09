@@ -173,23 +173,10 @@ int step(double *const x,
         .5, .0833, .0417, .0264, .0188, .0143, .0114,
         .00936, .00789, .00679, .00592, .00524, .00468};
 
-    /* System generated locals */
-    int i__1;
+    const double p5eps = *eps * .5;
 
-    /* Local variables */
-    int i;
-    static int j, l;
-    static int iq, im1, km1, km2, ip1, kp1, kp2;
-    static double erk, err, tau, rho, sum;
-    static int nsm2, nsp1, nsp2;
-    static double absh, hnew;
-    static int knew;
-    static double xold, erkm1, erkm2, erkp1, temp1, temp2, temp3,
-        temp4, temp5, temp6, p5eps;
-    static int ifail;
-    static double reali, round;
-    static int limit1;
-    static double realns;
+    int i, ifail, iq, j, km1, km2, knew, kp1, kp2, l;
+    double absh, erk, erkm1, erkm2, erkp1, err, hnew, round, temp1;
 
     /* Parameter adjustments */
     --yp;
@@ -205,8 +192,6 @@ int step(double *const x,
     --w;
     --g;
 
-    /* Function Body */
-
     /**** begin block 0 ****/
     /* check if step size or error tolerance is too small for machine
        precision.  if first step, initialize phi array and estimate a starting
@@ -217,7 +202,6 @@ int step(double *const x,
         *h = copysign(4.0 * DBL_EPSILON * fabs(*x), *h);
         return 1;
     }
-    p5eps = *eps * .5;
 
     /* if error tolerance is too small, increase it to an acceptable value */
     round = 0.;
@@ -233,19 +217,20 @@ int step(double *const x,
     g[2] = .5;
     sig[1] = 1.;
     if (*start) {
-
         /* initialize.  compute appropriate step size for first step */
         (*f)(f_ctx, *x, &y[1], &yp[1]);
-        sum = 0.;
-        for (l = 1; l <= neqn; ++l) {
-            phi[l + neqn] = yp[l];
-            phi[l + neqn * 2] = 0.;
-            sum += pow(yp[l] / wt[l], 2.0);
-        }
-        sum = sqrt(sum);
-        absh = fabs(*h);
-        if (*eps < sum * 16. * pow(*h, 2.0)) {
-            absh = sqrt(*eps / sum) * .25;
+        {
+            double sum = 0.;
+            for (l = 1; l <= neqn; ++l) {
+                phi[l + neqn] = yp[l];
+                phi[l + neqn * 2] = 0.;
+                sum += pow(yp[l] / wt[l], 2.0);
+            }
+            sum = sqrt(sum);
+            absh = fabs(*h);
+            if (*eps < sum * 16. * pow(*h, 2.0)) {
+                absh = sqrt(*eps / sum) * .25;
+            }
         }
         *h = copysign(max(absh, 4.0 * DBL_EPSILON * fabs(*x)), *h);
         *hold = 0.;
@@ -268,6 +253,8 @@ int step(double *const x,
     /* compute coefficients of formulas for this step.  avoid computing */
     /* those quantities not changed when step size is not changed. */
     while (1) {
+        int nsp1; /* single assignment */
+
         kp1 = *k + 1;
         kp2 = *k + 2;
         km1 = *k - 1;
@@ -283,26 +270,21 @@ int step(double *const x,
         }
         nsp1 = *ns + 1;
         if (*k >= *ns) {
+            temp1 = *h * *ns;
             /* compute those components of alpha, beta, psi, sig which are
                changed */
-
-            beta[*ns] = 1.;
-            realns = (double)(*ns);
-            alpha[*ns] = 1. / realns;
-            temp1 = *h * realns;
-            sig[nsp1] = 1.;
+            beta[*ns] = 1.0;
+            alpha[*ns] = 1.0 / *ns;
+            sig[nsp1] = 1.0;
             if (*k >= nsp1) {
-                const int i__1 = *k;
-                int i;
-                for (i = nsp1; i <= i__1; ++i) {
-                    im1 = i - 1;
-                    temp2 = psi[im1];
+                for (i = nsp1; i <= *k; ++i) {
+                    const int im1 = i - 1;
+                    const double temp2 = psi[im1];
                     psi[im1] = temp1;
                     beta[i] = beta[im1] * psi[im1] / temp2;
                     temp1 = temp2 + *h;
                     alpha[i] = *h / temp1;
-                    reali = (double)i;
-                    sig[i + 1] = reali * alpha[i] * sig[i];
+                    sig[i + 1] = (double)i * alpha[i] * sig[i];
                 }
             }
             psi[*k] = temp1;
@@ -311,18 +293,15 @@ int step(double *const x,
 
             /* initialize v and set w.  g[1] is set in data statement */
             if (*ns <= 1) {
-                const int i__1 = *k;
-                for (iq = 1; iq <= i__1; ++iq) {
-                    temp3 = (double)(iq * (iq + 1));
-                    v[iq] = 1. / temp3;
+                for (iq = 1; iq <= *k; ++iq) {
+                    v[iq] = 1.0 / (iq * (iq + 1));
                     w[iq] = v[iq];
                 }
             } else {
                 /* if order was raised, update diagonal part of v */
                 if (*k > *kold) {
-                    temp4 = (double)(*k * kp1);
-                    v[*k] = 1. / temp4;
-                    nsm2 = *ns - 2;
+                    const int nsm2 = *ns - 2;
+                    v[*k] = 1.0 / (*k * kp1);
                     if (nsm2 >= 1) {
                         for (j = 1; j <= nsm2; ++j) {
                             int i = *k - j;
@@ -331,9 +310,8 @@ int step(double *const x,
                     }
                 }
                 /* update v and set w */
-                limit1 = kp1 - *ns;
-                temp5 = alpha[*ns];
-                for (iq = 1; iq <= limit1; ++iq) {
+                const double temp5 = alpha[*ns];
+                for (iq = 1; iq <= kp1 - *ns; ++iq) {
                     v[iq] -= temp5 * v[iq + 1];
                     w[iq] = v[iq];
                 }
@@ -341,12 +319,10 @@ int step(double *const x,
             }
 
             /* compute the g[] in the work vector w[] */
-            nsp2 = *ns + 2;
-            if (kp1 >= nsp2) {
-                int i;
-                for (i = nsp2; i <= kp1; ++i) {
+            if (kp1 >= *ns + 2) {
+                for (i = *ns + 2; i <= kp1; ++i) {
                     const int limit2 = kp2 - i;
-                    temp6 = alpha[i - 1];
+                    const double temp6 = alpha[i - 1];
                     for (iq = 1; iq <= limit2; ++iq) {
                         w[iq] -= temp6 * w[iq + 1];
                     }
@@ -363,12 +339,9 @@ int step(double *const x,
 
         /* change phi to phi star */
         if (*k >= nsp1) {
-            int i;
-            i__1 = *k;
-            for (i = nsp1; i <= i__1; ++i) {
-                temp1 = beta[i];
+            for (i = nsp1; i <= *k; ++i) {
                 for (l = 1; l <= neqn; ++l) {
-                    phi[l + i * neqn] = temp1 * phi[l + i * neqn];
+                    phi[l + i * neqn] = beta[i] * phi[l + i * neqn];
                 }
             }
         }
@@ -378,11 +351,10 @@ int step(double *const x,
             phi[l + kp1 * neqn] = 0.;
             p[l] = 0.;
         }
-        i__1 = *k;
-        for (j = 1; j <= i__1; ++j) {
-            int i = kp1 - j;
-            ip1 = i + 1;
-            temp2 = g[i];
+        for (j = 1; j <= *k; ++j) {
+            const int i = kp1 - j;
+            const int ip1 = i + 1;
+            const double temp2 = g[i];
             for (l = 1; l <= neqn; ++l) {
                 p[l] += temp2 * phi[l + i * neqn];
                 phi[l + i * neqn] += phi[l + ip1 * neqn];
@@ -390,7 +362,7 @@ int step(double *const x,
         }
         if (!*nornd) {
             for (l = 1; l <= neqn; ++l) {
-                tau = *h * p[l] - phi[l + neqn * 15];
+                const double tau = *h * p[l] - phi[l + neqn * 15];
                 p[l] = y[l] + tau;
                 phi[l + (neqn * 16)] = p[l] - y[l] - tau;
             }
@@ -399,90 +371,93 @@ int step(double *const x,
                 p[l] = y[l] + *h * p[l];
             }
         }
-        xold = *x;
-        *x += *h;
-        absh = fabs(*h);
-        (*f)(f_ctx, *x, &p[1], &yp[1]);
+        {
+            const double xold = *x;
+            *x += *h;
+            absh = fabs(*h);
+            (*f)(f_ctx, *x, &p[1], &yp[1]);
 
-        /* estimate errors at orders k, k-1, k-2 */
-        erkm2 = 0.;
-        erkm1 = 0.;
-        erk = 0.;
-        for (l = 1; l <= neqn; ++l) {
-            temp3 = 1. / wt[l];
-            temp4 = yp[l] - phi[l + neqn];
+            /* estimate errors at orders k, k-1, k-2 */
+            erkm2 = 0.;
+            erkm1 = 0.;
+            erk = 0.;
+            for (l = 1; l <= neqn; ++l) {
+                const double temp3 = 1. / wt[l];
+                const double temp4 = yp[l] - phi[l + neqn];
+                if (km2 > 0) {
+                    erkm2 += pow((phi[l + km1 * neqn] + temp4) * temp3, 2.0);
+                }
+                if (km2 >= 0) {
+                    erkm1 += pow((phi[l + *k * neqn] + temp4) * temp3, 2.0);
+                }
+                erk += pow(temp4 * temp3, 2.0);
+            }
             if (km2 > 0) {
-                erkm2 += pow((phi[l + km1 * neqn] + temp4) * temp3, 2.0);
+                erkm2 = absh * sig[km1] * gstr[km2 - 1] * sqrt(erkm2);
             }
             if (km2 >= 0) {
-                erkm1 += pow((phi[l + *k * neqn] + temp4) * temp3, 2.0);
+                erkm1 = absh * sig[*k] * gstr[km1 - 1] * sqrt(erkm1);
             }
-            erk += pow(temp4 * temp3, 2.0);
-        }
-        if (km2 > 0) {
-            erkm2 = absh * sig[km1] * gstr[km2 - 1] * sqrt(erkm2);
-        }
-        if (km2 >= 0) {
-            erkm1 = absh * sig[*k] * gstr[km1 - 1] * sqrt(erkm1);
-        }
-        temp5 = absh * sqrt(erk);
-        err = temp5 * (g[*k] - g[kp1]);
-        erk = temp5 * sig[kp1] * gstr[*k - 1];
-        knew = *k;
+            const double temp5 = absh * sqrt(erk);
+            err = temp5 * (g[*k] - g[kp1]);
+            erk = temp5 * sig[kp1] * gstr[*k - 1];
+            knew = *k;
 
-        /* test if order should be lowered */
-        if (km2 == 0) {
-            if (erkm1 <= erk * .5) {
-                knew = km1;
+            /* test if order should be lowered */
+            if (km2 == 0) {
+                if (erkm1 <= erk * .5) {
+                    knew = km1;
+                }
+            } else if (km2 > 0) {
+                if (max(erkm1, erkm2) <= erk) {
+                    knew = km1;
+                }
             }
-        } else if (km2 > 0) {
-            if (max(erkm1, erkm2) <= erk) {
-                knew = km1;
+
+            /* test if step successful */
+            if (err <= *eps) {
+                break;
             }
+            /**** end block 2 ****/
+
+            /**** begin block 3 ****/
+            /* the step is unsuccessful.  restore x, phi, psi.  if third
+               consecutive failure, set order to one.  if step fails more than
+               three times, consider an optimal step size.  double error tolerance
+               and return if estimated step size is too small for machine
+               precision. */
+
+            /* restore x, phi and psi */
+            *phase1 = false;
+            *x = xold;
         }
-
-        /* test if step successful */
-        if (err <= *eps) {
-            break;
-        }
-        /**** end block 2 ****/
-
-        /**** begin block 3 ****/
-        /* the step is unsuccessful.  restore x, phi, psi.  if third
-           consecutive failure, set order to one.  if step fails more than
-           three times, consider an optimal step size.  double error tolerance
-           and return if estimated step size is too small for machine
-           precision. */
-
-        /* restore x, phi and psi */
-        *phase1 = false;
-        *x = xold;
-        i__1 = *k;
-        for (i = 1; i <= i__1; ++i) {
-            temp1 = 1. / beta[i];
-            ip1 = i + 1;
+        for (i = 1; i <= *k; ++i) {
+            const int ip1 = i + 1;
             for (l = 1; l <= neqn; ++l) {
-                phi[l + i * neqn] = temp1 * (phi[l + i * neqn] - phi[l + ip1 * neqn]);
+                phi[l + i * neqn] =
+                    (1.0 / beta[i]) *
+                    (phi[l + i * neqn] - phi[l + ip1 * neqn]);
             }
         }
         if (*k >= 2) {
             int i;
-            const int i__1 = *k;
-            for (i = 2; i <= i__1; ++i) {
+            for (i = 2; i <= *k; ++i) {
                 psi[i - 1] = psi[i] - *h;
             }
         }
         /* on third failure, set order to one.  thereafter, use optimal step
            size */
         ++ifail;
-        temp2 = .5;
-        if (ifail >= 3) {
-            if (ifail != 3 && p5eps < erk * .25) {
-                temp2 = sqrt(p5eps / erk);
+        {
+            double temp2 = .5;
+            if (ifail >= 3) {
+                if (ifail != 3 && p5eps < erk * .25) {
+                    temp2 = sqrt(p5eps / erk);
+                }
+                knew = 1;
             }
-            knew = 1;
+            *h = temp2 * *h;
         }
-        *h = temp2 * *h;
         *k = knew;
         if (fabs(*h) < 4.0 * DBL_EPSILON * fabs(*x)) {
             *h = copysign(4.0 * DBL_EPSILON * fabs(*x), *h);
@@ -503,7 +478,9 @@ int step(double *const x,
     temp1 = *h * g[kp1];
     if (!*nornd) {
         for (l = 1; l <= neqn; ++l) {
-            rho = temp1 * (yp[l] - phi[l + neqn]) - phi[l + (neqn * 16)];
+            const double rho =
+                temp1 * (yp[l] - phi[l + neqn]) -
+                phi[l + (neqn * 16)];
             y[l] = p[l] + rho;
             phi[l + neqn * 15] = y[l] - p[l] - rho;
         }
@@ -521,8 +498,7 @@ int step(double *const x,
         phi[l + kp1 * neqn] = yp[l] - phi[l + neqn];
         phi[l + kp2 * neqn] = phi[l + kp1 * neqn] - phi[l + kp2 * neqn];
     }
-    i__1 = *k;
-    for (i = 1; i <= i__1; ++i) {
+    for (i = 1; i <= *k; ++i) {
         for (l = 1; l <= neqn; ++l) {
             phi[l + i * neqn] += phi[l + kp1 * neqn];
         }
@@ -573,8 +549,7 @@ int step(double *const x,
         if (p5eps >= erk) {
             return 0;
         }
-        temp2 = (double)(*k + 1);
-        hnew = absh * max(0.5, min(0.9, pow(p5eps / erk, 1.0 / temp2)));
+        hnew = absh * max(0.5, min(0.9, pow(p5eps / erk, 1.0 / (*k + 1))));
         hnew = copysign(max(hnew, 4.0 * DBL_EPSILON * fabs(*x)), *h);
     }
     *h = hnew;
@@ -626,7 +601,6 @@ void intrp(double *const x,
     static double eta;
     static int kip1;
     static double term, temp1, temp2, temp3, gamma;
-    static int limit1;
     static double psijm1;
 
     /* Parameter adjustments */
@@ -653,6 +627,7 @@ void intrp(double *const x,
 
     for (j = 2; j <= ki; ++j) {
         int i;
+        int limit1;
         jm1 = j - 1;
         psijm1 = psi[jm1];
         gamma = (hi + term) / psijm1;
@@ -767,11 +742,11 @@ void de(const fn_type f,
         }
         *delsgn = copysign(1.0, del);
         *h = copysign(max(fabs(tout - *x), 4.0 * DBL_EPSILON * fabs(*x)),
-                        tout - *x);
+                      tout - *x);
     }
 
     /* if already past output point, interpolate and return */
-    for (nostep = 0; ; ++nostep) {
+    for (nostep = 0;; ++nostep) {
 
         if (fabs(*x - *t) >= absdel) {
             intrp(x, yy, tout, y, ypout, neqn, kold, phi, psi);
