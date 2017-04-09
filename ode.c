@@ -18,8 +18,7 @@ static double max(double x, double y)
 }
 
 int step(double *x, double *y, U_fp f, void *f_ctx, int *neqn,
-         double *h__, double *eps, double *wt, bool *
-                                                   start,
+         double *h__, double *eps, double *wt, bool *start,
          double *hold, int *k, int *kold, bool *crash,
          double *phi, double *p, double *yp, double *psi,
          double *alpha, double *beta, double *sig, double *v,
@@ -27,10 +26,8 @@ int step(double *x, double *y, U_fp f, void *f_ctx, int *neqn,
 {
     /* Initialized data */
 
-    static double two[13] = {2., 4., 8., 16., 32., 64., 128., 256., 512., 1024.,
-                             2048., 4096., 8192.};
-    static double gstr[13] = {.5, .0833, .0417, .0264, .0188, .0143, .0114,
-                              .00936, .00789, .00679, .00592, .00524, .00468};
+    static const double gstr[13] = {.5, .0833, .0417, .0264, .0188, .0143, .0114,
+                                    .00936, .00789, .00679, .00592, .00524, .00468};
 
     /* System generated locals */
     int phi_dim1, phi_offset, i__1, i__2;
@@ -724,7 +721,7 @@ L460:
     if (*phase1) {
         goto L465;
     }
-    if (p5eps >= erk * two[*k]) {
+    if (p5eps >= erk * pow(2.0, *k + 1)) {
         goto L465;
     }
     hnew = *h__;
@@ -885,7 +882,7 @@ int de(U_fp f, void *f_ctx, int *neqn, double *y, double *t,
 {
     /* Initialized data */
 
-    static int maxnum = 500;
+    static const int maxnum = 500;
 
     /* System generated locals */
     int phi_dim1, phi_offset, i__1;
@@ -1128,20 +1125,20 @@ int ode(U_fp f, void *f_ctx, int *neqn, double *y, double *t,
                                                           iflag,
         double *work, int *iwork)
 {
-    static int ialpha = 1;
-    static int ih = 89;
-    static int ihold = 90;
-    static int istart = 91;
-    static int itold = 92;
-    static int idelsn = 93;
-    static int ibeta = 13;
-    static int isig = 25;
-    static int iv = 38;
-    static int iw = 50;
-    static int ig = 62;
-    static int iphase = 75;
-    static int ipsi = 76;
-    static int ix = 88;
+    static const int ialpha = 1;
+    static const int ih = 89;
+    static const int ihold = 90;
+    static const int istart = 91;
+    static const int itold = 92;
+    static const int idelsn = 93;
+    static const int ibeta = 13;
+    static const int isig = 25;
+    static const int iv = 38;
+    static const int iw = 50;
+    static const int ig = 62;
+    static const int iphase = 75;
+    static const int ipsi = 76;
+    static const int ix = 88;
 
     static int ip, iyp, iwt, iyy, iphi;
     static bool nornd, start, phase1;
