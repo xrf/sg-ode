@@ -278,16 +278,14 @@ int step(double *const restrict x,
             beta[*ns - 1] = 1.0;
             alpha[*ns - 1] = 1.0 / *ns;
             sig[nsp1 - 1] = 1.0;
-            if (*k >= nsp1) {
-                for (i = nsp1; i <= *k; ++i) {
-                    const int im1 = i - 1;
-                    const double temp2 = psi[im1 - 1];
-                    psi[im1 - 1] = temp1;
-                    beta[i - 1] = beta[im1 - 1] * psi[im1 - 1] / temp2;
-                    temp1 = temp2 + *h;
-                    alpha[i - 1] = *h / temp1;
-                    sig[i] = (double)i * alpha[i - 1] * sig[i - 1];
-                }
+            for (i = *ns; i < *k; ++i) {
+                const int im1 = i - 1;
+                const double temp2 = psi[im1];
+                psi[im1] = temp1;
+                beta[i] = beta[im1] * psi[im1] / temp2;
+                temp1 = temp2 + *h;
+                alpha[i] = *h / temp1;
+                sig[i + 1] = (double)(i + 1) * alpha[i] * sig[i];
             }
             psi[*k - 1] = temp1;
 
