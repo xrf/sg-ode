@@ -4,10 +4,21 @@
 extern "C" {
 #endif
 
-void ode(void (*f)(void *f_ctx, double t, const double *y, double *yp),
-         void *f_ctx, int neqn, double *y, double *t,
-         double tout, double *relerr, double *abserr, int *
-         iflag, double *work, int *iwork, int maxnum);
+void ode(void (*f)(void *restrict f_ctx,
+                   double t,
+                   const double *restrict y,
+                   double *restrict yp),
+         void *restrict f_ctx,
+         int neqn,
+         double *restrict y,
+         double *restrict t,
+         double tout,
+         double *restrict relerr,
+         double *restrict abserr,
+         int *restrict iflag,
+         double *restrict work,
+         int *restrict iwork,
+         int maxnum);
 
 #ifdef __cplusplus
 }

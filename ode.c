@@ -9,7 +9,10 @@
 #include <string.h>
 #include "ode.h"
 
-typedef void (*fn_type)(void *, double, const double *, double *);
+typedef void (*fn_type)(void *restrict f_ctx,
+                        double t,
+                        const double *restrict y,
+                        double *restrict yp);
 
 static double min(double x, double y)
 {
@@ -22,7 +25,8 @@ static double max(double x, double y)
 }
 
 static void clear_double_array(double *a, size_t n) {
-    // compilers should be able to optimize this to a simple memset
+    // compilers should be able to optimize this to a simple memset (can't use
+    // a real memset because C standard doesn't guarantee that would work)
     size_t i;
     for (i = 0; i < n; ++i) {
         a[i] = 0.0;
@@ -156,35 +160,36 @@ static void copy_double_array(double *out, const double *in, size_t n) {
   tolerance, the user just calls the code again.  A restart is neither
   required nor desirable.
 */
-int step(double *const x,
-         double *y,
+int step(double *const restrict x,
+         double *restrict y,
          const fn_type f,
-         void *const f_ctx,
+         void *const restrict f_ctx,
          const int neqn,
-         double *const h,
-         double *const eps,
+         double *const restrict h,
+         double *const restrict eps,
          double *wt,
-         bool *const start,
-         double *const hold,
-         int *const k,
-         int *const kold,
-         double *phi,
-         double *p,
-         double *yp,
-         double *psi,
-         double *alpha,
-         double *beta,
-         double *sig,
-         double *v,
-         double *w,
-         double *g,
-         bool *const phase1,
-         int *const ns,
-         bool *const nornd)
+         bool *const restrict start,
+         double *const restrict hold,
+         int *const restrict k,
+         int *const restrict kold,
+         double *restrict phi,
+         double *restrict p,
+         double *restrict yp,
+         double *restrict psi,
+         double *restrict alpha,
+         double *restrict beta,
+         double *restrict sig,
+         double *restrict v,
+         double *restrict w,
+         double *restrict g,
+         bool *const restrict phase1,
+         int *const restrict ns,
+         bool *const restrict nornd)
 {
     static const double gstr[13] = {
         .5, .0833, .0417, .0264, .0188, .0143, .0114,
-        .00936, .00789, .00679, .00592, .00524, .00468};
+        .00936, .00789, .00679, .00592, .00524, .00468
+    };
 
     const double p5eps = *eps * .5;
 
@@ -653,39 +658,39 @@ void intrp(double *const restrict x,
   `de`.
 */
 void de(const fn_type f,
-        void *const f_ctx,
+        void *const restrict f_ctx,
         const int neqn,
-        double *const y,
-        double *const t,
+        double *const restrict y,
+        double *const restrict t,
         const double tout,
-        double *const relerr,
-        double *const abserr,
-        int *const iflag,
-        double *const yy,
-        double *const wt,
-        double *const p,
-        double *const yp,
-        double *const ypout,
-        double *const phi,
-        double *const alpha,
-        double *const beta,
-        double *const sig,
-        double *const v,
-        double *const w,
-        double *const g,
-        bool *const phase1,
-        double *const psi,
-        double *const x,
-        double *const h,
-        double *const hold,
-        bool *const start,
-        double *const told,
-        double *const delsgn,
-        int *const ns,
-        bool *const nornd,
-        int *const k,
-        int *const kold,
-        int *const isnold,
+        double *const restrict relerr,
+        double *const restrict abserr,
+        int *const restrict iflag,
+        double *const restrict yy,
+        double *const restrict wt,
+        double *const restrict p,
+        double *const restrict yp,
+        double *const restrict ypout,
+        double *const restrict phi,
+        double *const restrict alpha,
+        double *const restrict beta,
+        double *const restrict sig,
+        double *const restrict v,
+        double *const restrict w,
+        double *const restrict g,
+        bool *const restrict phase1,
+        double *const restrict psi,
+        double *const restrict x,
+        double *const restrict h,
+        double *const restrict hold,
+        bool *const restrict start,
+        double *const restrict told,
+        double *const restrict delsgn,
+        int *const restrict ns,
+        bool *const restrict nornd,
+        int *const restrict k,
+        int *const restrict kold,
+        int *const restrict isnold,
         const int maxnum)
 {
     const int isn = *iflag >= 0 ? 1 : -1;
@@ -923,16 +928,16 @@ void de(const fn_type f,
   parameters must remain unchanged.
 */
 void ode(const fn_type f,
-         void *const f_ctx,
+         void *const restrict f_ctx,
          const int neqn,
-         double *const y,
-         double *const t,
+         double *const restrict y,
+         double *const restrict t,
          const double tout,
-         double *const relerr,
-         double *const abserr,
-         int *const iflag,
-         double *const work,
-         int *const iwork,
+         double *const restrict relerr,
+         double *const restrict abserr,
+         int *const restrict iflag,
+         double *const restrict work,
+         int *const restrict iwork,
          const int maxnum)
 {
     static const int ialpha = 0;
