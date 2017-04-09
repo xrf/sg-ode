@@ -250,9 +250,7 @@ int step(double *const x,
         *nornd = true;
         if (p5eps <= round * 100.) {
             *nornd = false;
-            for (l = 1; l <= neqn; ++l) {
-                phi[l + neqn * 15] = 0.;
-            }
+            clear_double_array(&phi[1 + neqn * 15], (size_t)neqn);
         }
     }
     ifail = 0;
@@ -961,8 +959,7 @@ void ode(const fn_type f,
     const int iypout = iyp + neqn;
     const int iphi = iypout + neqn;
 
-    // TODO: de-static-ify these variables
-    static bool nornd, start, phase1;
+    bool nornd, phase1, start;
 
     if (abs(*iflag) != 1) {
         start = work[istart] > 0.;
