@@ -179,9 +179,9 @@ int step(double *const restrict x,
          double *const restrict alpha,
          double *const restrict beta,
          double *const restrict sig,
-         double *restrict v,
-         double *restrict w,
-         double *restrict g,
+         double *const restrict v,
+         double *const restrict w,
+         double *const restrict g,
          bool *const restrict phase1,
          int *const restrict ns,
          bool *const restrict nornd)
@@ -202,9 +202,6 @@ int step(double *const restrict x,
     phi -= 1 + neqn;
     --wt;
     --y;
-    --v;
-    --w;
-    --g;
 
     /**** begin block 0 ****/
     /* check if step size or error tolerance is too small for machine
@@ -227,8 +224,8 @@ int step(double *const restrict x,
         *eps = round * 2.f * (4.0 * DBL_EPSILON + 1.);
         return 1;
     }
-    g[1] = 1.;
-    g[2] = .5;
+    g[0] = 1.;
+    g[1] = .5;
     sig[0] = 1.;
     if (*start) {
         /* initialize.  compute appropriate step size for first step */
@@ -306,39 +303,39 @@ int step(double *const restrict x,
             /* initialize v and set w.  g[1] is set in data statement */
             if (*ns <= 1) {
                 for (iq = 1; iq <= *k; ++iq) {
-                    v[iq] = 1.0 / (iq * (iq + 1));
-                    w[iq] = v[iq];
+                    v[iq - 1] = 1.0 / (iq * (iq + 1));
+                    w[iq - 1] = v[iq - 1];
                 }
             } else {
                 /* if order was raised, update diagonal part of v */
                 if (*k > *kold) {
                     const int nsm2 = *ns - 2;
-                    v[*k] = 1.0 / (*k * kp1);
+                    v[*k - 1] = 1.0 / (*k * kp1);
                     if (nsm2 >= 1) {
                         for (j = 1; j <= nsm2; ++j) {
                             int i = *k - j;
-                            v[i] -= alpha[j] * v[i + 1];
+                            v[i - 1] -= alpha[j] * v[i];
                         }
                     }
                 }
                 /* update v and set w */
                 const double temp5 = alpha[*ns - 1];
                 for (iq = 1; iq <= kp1 - *ns; ++iq) {
-                    v[iq] -= temp5 * v[iq + 1];
-                    w[iq] = v[iq];
+                    v[iq - 1] -= temp5 * v[iq];
+                    w[iq - 1] = v[iq - 1];
                 }
-                g[nsp1] = w[1];
+                g[nsp1 - 1] = w[0];
             }
 
-            /* compute the g[] in the work vector w[] */
+            /* compute the g in the work vector w */
             if (kp1 >= *ns + 2) {
                 for (i = *ns + 2; i <= kp1; ++i) {
                     const int limit2 = kp2 - i;
                     const double temp6 = alpha[i - 2];
                     for (iq = 1; iq <= limit2; ++iq) {
-                        w[iq] -= temp6 * w[iq + 1];
+                        w[iq - 1] -= temp6 * w[iq];
                     }
-                    g[i] = w[1];
+                    g[i - 1] = w[0];
                 }
             }
         }
@@ -366,7 +363,7 @@ int step(double *const restrict x,
         for (j = 1; j <= *k; ++j) {
             const int i = kp1 - j;
             const int ip1 = i + 1;
-            const double temp2 = g[i];
+            const double temp2 = g[i - 1];
             for (l = 1; l <= neqn; ++l) {
                 p[l] += temp2 * phi[l + i * neqn];
                 phi[l + i * neqn] += phi[l + ip1 * neqn];
@@ -411,7 +408,7 @@ int step(double *const restrict x,
                 erkm1 = absh * sig[*k - 1] * gstr[km1 - 1] * sqrt(erkm1);
             }
             const double temp5 = absh * sqrt(erk);
-            err = temp5 * (g[*k] - g[kp1]);
+            err = temp5 * (g[*k - 1] - g[kp1 - 1]);
             erk = temp5 * sig[kp1 - 1] * gstr[*k - 1];
             knew = *k;
 
@@ -487,7 +484,7 @@ int step(double *const restrict x,
     *hold = *h;
 
     /* correct and evaluate */
-    temp1 = *h * g[kp1];
+    temp1 = *h * g[kp1 - 1];
     if (!*nornd) {
         for (l = 1; l <= neqn; ++l) {
             const double rho =
