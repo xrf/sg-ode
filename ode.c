@@ -75,7 +75,8 @@ static void copy_double_array(double *out, const double *in, size_t n) {
   Step size used for last successful step
 
   @param k
-  Appropriate order for next step (determined by code)
+  Appropriate order for next step (determined by code).
+  Invariant: k >= 1 && k < 13
 
   @param kold
   Order used for last successful step
@@ -165,7 +166,7 @@ int step(double *const restrict x,
          double *const restrict y,
          const fn_type f,
          void *const restrict f_ctx,
-         const int neqn,
+         const size_t neqn,
          double *const restrict h,
          double *const restrict eps,
          double *const restrict wt,
@@ -194,7 +195,8 @@ int step(double *const restrict x,
 
     const double p5eps = *eps * 0.5;
 
-    int i, ifail, iq, j, km1, km2, knew, kp1, l;
+    size_t l;
+    int i, ifail, iq, j, knew;
     double absh, erk, erkm1, erkm2, erkp1, err, hnew, round, temp1;
 
     /**** begin block 0 ****/
@@ -256,10 +258,6 @@ int step(double *const restrict x,
     /* compute coefficients of formulas for this step.  avoid computing */
     /* those quantities not changed when step size is not changed. */
     while (1) {
-        kp1 = *k + 1;
-        km1 = *k - 1;
-        km2 = *k - 2;
-
         /* ns is the number of steps taken with size h, including the current
            one.  when k < ns, no coefficients change */
         if (*h != *hold) {
@@ -296,7 +294,7 @@ int step(double *const restrict x,
             } else {
                 /* if order was raised, update diagonal part of v */
                 if (*k > *kold) {
-                    v[*k - 1] = 1.0 / (*k * kp1);
+                    v[*k - 1] = 1.0 / (*k * (*k + 1));
                     for (j = 1; j < *ns - 1; ++j) {
                         const int i = *k - j;
                         v[i - 1] -= alpha[j] * v[i];
@@ -304,7 +302,7 @@ int step(double *const restrict x,
                 }
                 /* update v and set w */
                 const double temp5 = alpha[*ns - 1];
-                for (iq = 0; iq < kp1 - *ns; ++iq) {
+                for (iq = 0; iq <= *k - *ns; ++iq) {
                     v[iq] -= temp5 * v[iq + 1];
                     w[iq] = v[iq];
                 }
@@ -334,7 +332,7 @@ int step(double *const restrict x,
         }
         /* predict solution and differences */
         for (l = 0; l < neqn; ++l) {
-            phi[l + kp1 * neqn] = phi[l + *k * neqn];
+            phi[l + (*k + 1) * neqn] = phi[l + *k * neqn];
             phi[l + *k * neqn] = 0.;
         }
         clear_double_array(p, (size_t)neqn);
@@ -368,33 +366,33 @@ int step(double *const restrict x,
             for (l = 0; l < neqn; ++l) {
                 const double iwt = 1.0 / wt[l];
                 const double ypmphi = yp[l] - phi[l];
-                if (km2 > 0) {
-                    erkm2 += pow((phi[l + km2 * neqn] + ypmphi) * iwt, 2.0);
+                if (*k > 2) {
+                    erkm2 += pow((phi[l + (*k - 2) * neqn] + ypmphi) * iwt, 2.0);
                 }
-                if (km2 >= 0) {
-                    erkm1 += pow((phi[l + km1 * neqn] + ypmphi) * iwt, 2.0);
+                if (*k >= 2) {
+                    erkm1 += pow((phi[l + (*k - 1) * neqn] + ypmphi) * iwt, 2.0);
                 }
                 erk += pow(ypmphi * iwt, 2.0);
             }
-            if (km2 > 0) {
-                erkm2 = absh * sig[km2] * gstr[km2 - 1] * sqrt(erkm2);
+            if (*k > 2) {
+                erkm2 = absh * sig[*k - 2] * gstr[*k - 3] * sqrt(erkm2);
             }
-            if (km2 >= 0) {
-                erkm1 = absh * sig[km1] * gstr[km2] * sqrt(erkm1);
+            if (k >= 2) {
+                erkm1 = absh * sig[*k - 1] * gstr[*k - 2] * sqrt(erkm1);
             }
             const double temp5 = absh * sqrt(erk);
-            err = temp5 * (g[km1] - g[*k]);
-            erk = temp5 * sig[*k] * gstr[km1];
+            err = temp5 * (g[*k - 1] - g[*k]);
+            erk = temp5 * sig[*k] * gstr[*k - 1];
             knew = *k;
 
             /* test if order should be lowered */
-            if (km2 == 0) {
+            if (*k == 2) {
                 if (erkm1 <= erk * 0.5) {
-                    knew = km1;
+                    knew = *k - 1;
                 }
-            } else if (km2 > 0) {
+            } else if (*k > 2) {
                 if (max(erkm1, erkm2) <= erk) {
-                    knew = km1;
+                    knew = *k - 1;
                 }
             }
 
@@ -475,7 +473,7 @@ int step(double *const restrict x,
 
     for (l = 0; l < neqn; ++l) {
         phi[l + *k * neqn] = yp[l] - phi[l];
-        phi[l + kp1 * neqn] = phi[l + *k * neqn] - phi[l + kp1 * neqn];
+        phi[l + (*k + 1) * neqn] = phi[l + *k * neqn] - phi[l + (*k + 1) * neqn];
     }
     for (i = 0; i < *k; ++i) {
         for (l = 0; l < neqn; ++l) {
@@ -488,19 +486,19 @@ int step(double *const restrict x,
        estimate unreliable */
 
     erkp1 = 0.;
-    if (knew == km1 || *k == 12) {
+    if (knew == *k - 1 || *k == 12) {
         *phase1 = false;
     }
 
     if (*phase1) {
-        *k = kp1;
+        ++*k;
         erk = erkp1;
-    } else if (knew == km1) {
-        *k = km1;
+    } else if (knew == *k - 1) {
+        --*k;
         erk = erkm1;
-    } else if (kp1 <= *ns) {
+    } else if (*k < *ns) {
         for (l = 0; l < neqn; ++l) {
-            erkp1 += pow(phi[l + kp1 * neqn] / wt[l], 2.0);
+            erkp1 += pow(phi[l + (*k + 1) * neqn] / wt[l], 2.0);
         }
         erkp1 = absh * gstr[*k] * sqrt(erkp1);
 
@@ -509,14 +507,14 @@ int step(double *const restrict x,
 
         if (*k > 1) {
             if (erkm1 <= min(erk, erkp1)) {
-                *k = km1;
+                --*k;
                 erk = erkm1;
             } else if (erkp1 < erk && *k != 12) {
-                *k = kp1;
+                ++*k;
                 erk = erkp1;
             }
         } else if (erkp1 < erk * 0.5) {
-            *k = kp1;
+            ++*k;
             erk = erkp1;
         }
     }
