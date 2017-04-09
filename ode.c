@@ -255,7 +255,7 @@ int step(double *const restrict y,
         *nornd = true;
         if (p5eps <= round * 100.0) {
             *nornd = false;
-            /* φ[14] ← 𝟎 */
+            /* 𝛗[14] ← 𝟎 */
             clear_double_array(&phi[neqn * 14], neqn);
         }
     }
@@ -346,13 +346,14 @@ int step(double *const restrict y,
         copy_double_array(phi + (*k + 1) * neqn, phi + *k * neqn, neqn);
         /* 𝛗[k] ← 𝟎 */
         clear_double_array(phi + *k * neqn, neqn);
-        /* 𝐩 ← 𝟎 */
+        /* 𝐩 ← 𝛗 𝐠 (matrix-vector) */
         clear_double_array(p, neqn);
         for (i = *k; i-- > 0;) {
-            /* 𝐩 ← 𝐩 + g[i] 𝛗[i] */
             for (l = 0; l < neqn; ++l) {
                 p[l] += g[i] * phi[l + i * neqn];
             }
+        }
+        for (i = *k; i-- > 0;) {
             /* 𝛗[i] ← 𝛗[i] + 𝛗[i + 1] */
             for (l = 0; l < neqn; ++l) {
                 phi[l + i * neqn] += phi[l + (i + 1) * neqn];
@@ -634,15 +635,13 @@ void intrp(const double x,
     }
 
     /* interpolate */
-    /* 𝐲°′ ← 𝟎 */
+    /* 𝐲° ← 𝛗 𝐠 (matrix-vector)
+       𝐲°′ ← 𝛗 𝛒 (matrix-vector) */
     clear_double_array(ypout, neqn);
-    /* 𝐲° ← 𝟎 */
     clear_double_array(yout, neqn);
     for (i = ki; i-- > 0;) {
         const double gi = g[i];
         const double rhoi = rho[i];
-        /* 𝐲° ← 𝐲° + g[i] 𝛗[i]
-           𝐲°′ ← 𝐲°′ + ρ[i] 𝛗[i] */
         for (l = 0; l < neqn; ++l) {
             yout[l] += gi * phi[l + i * neqn];
             ypout[l] += rhoi * phi[l + i * neqn];
