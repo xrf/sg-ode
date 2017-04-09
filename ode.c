@@ -648,10 +648,10 @@ void de(const fn_type f,
         struct Ode *const self,
         const int maxnum)
 {
-    const int isn = *iflag >= 0 ? 1 : -1;
+    const bool isn = *iflag >= 0;
     const double del = tout - *t;
     const double absdel = fabs(del);
-    const double tend = isn < 0 ? tout : *t + del * 10.0;
+    const double tend = isn ? *t + del * 10.0 : tout;
 
     bool stiff;
     double abseps, eps, releps;
@@ -676,7 +676,7 @@ void de(const fn_type f,
     stiff = false;
     releps = *relerr / eps;
     abseps = *abserr / eps;
-    if (*iflag == 1 || self->isnold < 0 || self->delsgn * del <= 0.0) {
+    if (*iflag == 1 || !self->isnold || self->delsgn * del <= 0.0) {
         /* on start and restart also set work variables x and yy, store the
            direction of integration and initialize the step size */
         self->start = true;
@@ -703,8 +703,7 @@ void de(const fn_type f,
 
         /* if cannot go past output point and sufficiently close, extrapolate and
            return */
-        if (isn <= 0 ||
-            fabs(tout - self->x) < 4.0 * DBL_EPSILON * fabs(self->x)) {
+        if (!isn || fabs(tout - self->x) < 4.0 * DBL_EPSILON * fabs(self->x)) {
             self->h = tout - self->x;
             (*f)(f_ctx, self->x, yy, yp);
             for (l = 0; l < neqn; ++l) {
@@ -719,14 +718,14 @@ void de(const fn_type f,
 
         /* test for too many steps */
         if (nostep >= maxnum) {
-            *iflag = isn * 4;
+            *iflag = isn ? 4 : -4;
             if (stiff) {
-                *iflag = isn * 5;
+                *iflag = isn ? 5 : -5;
             }
             copy_double_array(y, yy, (size_t)neqn);
             *t = self->x;
             self->told = *t;
-            self->isnold = 1;
+            self->isnold = true;
             return;
         }
 
@@ -738,13 +737,13 @@ void de(const fn_type f,
 
         /* test for tolerances too small */
         if (step(yy, f, f_ctx, neqn, &eps, wt, phi, p, yp, self)) {
-            *iflag = isn * 3;
+            *iflag = isn ? 3 : -3;
             *relerr = eps * releps;
             *abserr = eps * abseps;
             copy_double_array(y, yy, (size_t)neqn);
             *t = self->x;
             self->told = *t;
-            self->isnold = 1;
+            self->isnold = true;
             return;
         }
 
@@ -771,19 +770,18 @@ void de(const fn_type f,
   define a new value `tout` and call `ode` again.
 
   The differential equations are actually solved by a suite of codes `de`,
-  `step`, and `intrp`.  `ode` allocates virtual storage in the arrays `work`
-  and `iwork` and calls `de`.  `de` is a supervisor which directs the
-  solution.  It calls on the routines `step` and `intrp` to advance the
-  integration and to interpolate at output points.  `step` uses a modified
-  divided difference form of the Adams PECE formulas and local extrapolation.
-  It adjusts the order and step size to control the local error per unit step
-  in a generalized sense.  Normally each call to `step` advances the solution
-  one step in the direction of `tout`.  For reasons of efficiency `de`
-  integrates beyond `tout` internally, though never beyond
-  `t + 10 * (tout - t)`, and calls `intrp` to interpolate the solution at
-  `tout`.  An option is provided to stop the integration at `tout` but it
-  should be used only if it is impossible to continue the integration beyond
-  `tout`.
+  `step`, and `intrp`.  `ode` allocates virtual storage in the `work` array
+  and calls `de`.  `de` is a supervisor which directs the solution.  It calls
+  on the routines `step` and `intrp` to advance the integration and to
+  interpolate at output points.  `step` uses a modified divided difference
+  form of the Adams PECE formulas and local extrapolation.  It adjusts the
+  order and step size to control the local error per unit step in a
+  generalized sense.  Normally each call to `step` advances the solution one
+  step in the direction of `tout`.  For reasons of efficiency `de` integrates
+  beyond `tout` internally, though never beyond `t + 10 * (tout - t)`, and
+  calls `intrp` to interpolate the solution at `tout`.  An option is provided
+  to stop the integration at `tout` but it should be used only if it is
+  impossible to continue the integration beyond `tout`.
 
   This code is completely explained and documented in the text, Computer
   Solution of Ordinary Differential Equations: The Initial Value Problem
@@ -821,7 +819,7 @@ void de(const fn_type f,
   Arrays to hold information internal to `de` which is necessary for
   subsequent calls (length: `21 * neqn`)
 
-  @param iwork
+  @param self
   Arrays to hold information internal to `de` which is necessary for
   subsequent calls (length: `5`)
 
@@ -830,7 +828,7 @@ void de(const fn_type f,
   The user must provide storage in their calling program for the arrays
   in the call list,
 
-      y[neqn], work[100 + 21 * neqn], iwork[5],
+      y[neqn], work[21 * neqn], self
 
   Supply supply the subroutine `f(f_ctx, t, y, yp)` to evaluate
 
@@ -869,7 +867,7 @@ void de(const fn_type f,
         - `5`: Integration did not reach `tout` because equations appear to be
           stiff.
         - `6`: Invalid input parameters (fatal error).
-    - `work`, `iwork`: Information generally of no interest to the user but
+    - `work`, `self`: Information generally of no interest to the user but
       necessary for subsequent calls.
 
   # Subsequent calls to `ode`
