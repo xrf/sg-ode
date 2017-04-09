@@ -38,7 +38,7 @@ int main(void)
     static const size_t neqn = 3;
     double y[3], t, tout, work[63] = {0.0};
     int i;
-    struct Ode iwork = ODE_INITIALIZER;
+    struct Ode iwork;
     double relerr = 1.0e-9;
     double abserr = 1.0e-16;
     int iflag = 1;

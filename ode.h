@@ -15,8 +15,6 @@ struct Ode {
     bool nornd, phase1, start;
 };
 
-#define ODE_INITIALIZER {65535, 65535, 65535, 32767, {NAN}, {NAN}, {NAN}, {NAN}, {NAN}, {NAN}, {NAN}, NAN, NAN, NAN, NAN, NAN, false, false, false}
-
 void ode(void (*f)(void *restrict f_ctx,
                    double t,
                    const double *restrict y,
