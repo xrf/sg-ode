@@ -209,8 +209,8 @@ int step(double *const restrict x,
 
     /* if error tolerance is too small, increase it to an acceptable value */
     round = 0.;
-    for (l = 1; l <= neqn; ++l) {
-        round += pow(y[l - 1] / wt[l - 1], 2.0);
+    for (l = 0; l < neqn; ++l) {
+        round += pow(y[l] / wt[l], 2.0);
     }
     round = 2.0 * DBL_EPSILON * sqrt(round);
     if (p5eps < round) {
@@ -222,13 +222,13 @@ int step(double *const restrict x,
     sig[0] = 1.;
     if (*start) {
         /* initialize.  compute appropriate step size for first step */
-        (*f)(f_ctx, *x, &y[1 - 1], yp);
+        (*f)(f_ctx, *x, y, yp);
         {
             double sum = 0.;
-            for (l = 1; l <= neqn; ++l) {
-                phi[l - 1] = yp[l - 1];
-                phi[l - 1 + neqn] = 0.;
-                sum += pow(yp[l - 1] / wt[l - 1], 2.0);
+            clear_double_array(phi + neqn, (size_t)neqn);
+            for (l = 0; l < neqn; ++l) {
+                phi[l] = yp[l];
+                sum += pow(yp[l] / wt[l], 2.0);
             }
             sum = sqrt(sum);
             absh = fabs(*h);
