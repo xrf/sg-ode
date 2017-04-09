@@ -176,7 +176,7 @@ int step(double *const restrict x,
          double *restrict p,
          double *restrict yp,
          double *const restrict psi,
-         double *restrict alpha,
+         double *const restrict alpha,
          double *const restrict beta,
          double *restrict sig,
          double *restrict v,
@@ -202,7 +202,6 @@ int step(double *const restrict x,
     phi -= 1 + neqn;
     --wt;
     --y;
-    --alpha;
     --sig;
     --v;
     --w;
@@ -288,7 +287,7 @@ int step(double *const restrict x,
             /* compute those components of alpha, beta, psi, sig which are
                changed */
             beta[*ns - 1] = 1.0;
-            alpha[*ns] = 1.0 / *ns;
+            alpha[*ns - 1] = 1.0 / *ns;
             sig[nsp1] = 1.0;
             if (*k >= nsp1) {
                 for (i = nsp1; i <= *k; ++i) {
@@ -297,8 +296,8 @@ int step(double *const restrict x,
                     psi[im1 - 1] = temp1;
                     beta[i - 1] = beta[im1 - 1] * psi[im1 - 1] / temp2;
                     temp1 = temp2 + *h;
-                    alpha[i] = *h / temp1;
-                    sig[i + 1] = (double)i * alpha[i] * sig[i];
+                    alpha[i - 1] = *h / temp1;
+                    sig[i + 1] = (double)i * alpha[i - 1] * sig[i];
                 }
             }
             psi[*k - 1] = temp1;
@@ -319,12 +318,12 @@ int step(double *const restrict x,
                     if (nsm2 >= 1) {
                         for (j = 1; j <= nsm2; ++j) {
                             int i = *k - j;
-                            v[i] -= alpha[j + 1] * v[i + 1];
+                            v[i] -= alpha[j] * v[i + 1];
                         }
                     }
                 }
                 /* update v and set w */
-                const double temp5 = alpha[*ns];
+                const double temp5 = alpha[*ns - 1];
                 for (iq = 1; iq <= kp1 - *ns; ++iq) {
                     v[iq] -= temp5 * v[iq + 1];
                     w[iq] = v[iq];
@@ -336,7 +335,7 @@ int step(double *const restrict x,
             if (kp1 >= *ns + 2) {
                 for (i = *ns + 2; i <= kp1; ++i) {
                     const int limit2 = kp2 - i;
-                    const double temp6 = alpha[i - 1];
+                    const double temp6 = alpha[i - 2];
                     for (iq = 1; iq <= limit2; ++iq) {
                         w[iq] -= temp6 * w[iq + 1];
                     }
