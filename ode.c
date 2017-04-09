@@ -175,7 +175,7 @@ int step(double *const restrict x,
          double *restrict phi,
          double *restrict p,
          double *restrict yp,
-         double *restrict psi,
+         double *const restrict psi,
          double *restrict alpha,
          double *restrict beta,
          double *restrict sig,
@@ -202,7 +202,6 @@ int step(double *const restrict x,
     phi -= 1 + neqn;
     --wt;
     --y;
-    --psi;
     --alpha;
     --beta;
     --sig;
@@ -295,15 +294,15 @@ int step(double *const restrict x,
             if (*k >= nsp1) {
                 for (i = nsp1; i <= *k; ++i) {
                     const int im1 = i - 1;
-                    const double temp2 = psi[im1];
-                    psi[im1] = temp1;
-                    beta[i] = beta[im1] * psi[im1] / temp2;
+                    const double temp2 = psi[im1 - 1];
+                    psi[im1 - 1] = temp1;
+                    beta[i] = beta[im1] * psi[im1 - 1] / temp2;
                     temp1 = temp2 + *h;
                     alpha[i] = *h / temp1;
                     sig[i + 1] = (double)i * alpha[i] * sig[i];
                 }
             }
-            psi[*k] = temp1;
+            psi[*k - 1] = temp1;
 
             /* compute coefficients g */
 
@@ -458,7 +457,7 @@ int step(double *const restrict x,
         if (*k >= 2) {
             int i;
             for (i = 2; i <= *k; ++i) {
-                psi[i - 1] = psi[i] - *h;
+                psi[i - 2] = psi[i - 1] - *h;
             }
         }
         /* on third failure, set order to one.  thereafter, use optimal step

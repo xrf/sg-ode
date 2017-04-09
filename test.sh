@@ -1,5 +1,5 @@
 #!/bin/sh
-set -eu
+set -eux
 gcc -O3 -g -Wall -Wextra -Wconversion -pedantic ode.c ode_demo.c -lm
 clang -g -std=c99 -Wall -Wextra -Wconversion -pedantic ode.c ode_demo.c -lm
 if ! ./a.out >ode_demo.out || ! diff ode_demo.out ode_demo.txt >/dev/null; then
