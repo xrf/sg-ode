@@ -1,5 +1,5 @@
-// origin: http://www.netlib.org/ode/ode.f
-// f2c'ed
+/* Original: http://www.netlib.org/ode/ode.f */
+/* Converted through f2c and then manually refactored. */
 
 #include <assert.h>
 #include <float.h>
@@ -214,24 +214,24 @@ int step(double *const restrict y,
     }
 
     /* if error tolerance is too small, increase it to an acceptable value */
-    round = 0.;
+    round = 0.0;
     for (l = 0; l < neqn; ++l) {
         round += pow(y[l] / wt[l], 2.0);
     }
     round = 2.0 * DBL_EPSILON * sqrt(round);
     if (p5eps < round) {
-        *eps = round * 2.f * (4.0 * DBL_EPSILON + 1.0);
+        *eps = round * 2.0 * (4.0 * DBL_EPSILON + 1.0);
         return 1;
     }
-    g[0] = 1.;
+    g[0] = 1.0;
     g[1] = 0.5;
-    sig[0] = 1.;
+    sig[0] = 1.0;
     if (*start) {
         /* initialize.  compute appropriate step size for first step */
         (*f)(f_ctx, *x, y, yp);
         {
-            double sum = 0.;
-            clear_double_array(phi + neqn, (size_t)neqn);
+            double sum = 0.0;
+            clear_double_array(phi + neqn, neqn);
             for (l = 0; l < neqn; ++l) {
                 phi[l] = yp[l];
                 sum += pow(yp[l] / wt[l], 2.0);
@@ -243,7 +243,7 @@ int step(double *const restrict y,
             }
         }
         *h = copysign(max(absh, 4.0 * DBL_EPSILON * fabs(*x)), *h);
-        *hold = 0.;
+        *hold = 0.0;
         *k = 1;
         *kold = 0;
         *start = false;
@@ -251,7 +251,7 @@ int step(double *const restrict y,
         *nornd = true;
         if (p5eps <= round * 100.0) {
             *nornd = false;
-            clear_double_array(&phi[neqn * 14], (size_t)neqn);
+            clear_double_array(&phi[neqn * 14], neqn);
         }
     }
     ifail = 0;
@@ -270,9 +270,8 @@ int step(double *const restrict y,
             ++*ns;
         }
         if (*k >= *ns) {
-            // PRE: ns >= 1
+            /* PRE: ns >= 1 */
 
-            unsigned i;
             temp1 = *h * *ns;
             /* compute those components of alpha, beta, psi, sig which are
                changed */
@@ -339,9 +338,9 @@ int step(double *const restrict y,
         /* predict solution and differences */
         for (l = 0; l < neqn; ++l) {
             phi[l + (*k + 1) * neqn] = phi[l + *k * neqn];
-            phi[l + *k * neqn] = 0.;
+            phi[l + *k * neqn] = 0.0;
         }
-        clear_double_array(p, (size_t)neqn);
+        clear_double_array(p, neqn);
         for (i = *k; i-- > 0;) {
             for (l = 0; l < neqn; ++l) {
                 p[l] += g[i] * phi[l + i * neqn];
@@ -366,9 +365,9 @@ int step(double *const restrict y,
             (*f)(f_ctx, *x, p, yp);
 
             /* estimate errors at orders k, k-1, k-2 */
-            erkm2 = 0.;
-            erkm1 = 0.;
-            erk = 0.;
+            erkm2 = 0.0;
+            erkm1 = 0.0;
+            erk = 0.0;
             for (l = 0; l < neqn; ++l) {
                 const double iwt = 1.0 / wt[l];
                 const double ypmphi = yp[l] - phi[l];
@@ -411,9 +410,9 @@ int step(double *const restrict y,
             /**** begin block 3 ****/
             /* the step is unsuccessful.  restore x, phi, psi.  if third
                consecutive failure, set order to one.  if step fails more than
-               three times, consider an optimal step size.  double error tolerance
-               and return if estimated step size is too small for machine
-               precision. */
+               three times, consider an optimal step size.  double error
+               tolerance and return if estimated step size is too small for
+               machine precision. */
 
             /* restore x, phi and psi */
             *phase1 = false;
@@ -491,7 +490,7 @@ int step(double *const restrict y,
        order, already decided to lower order, step size not constant so
        estimate unreliable */
 
-    erkp1 = 0.;
+    erkp1 = 0.0;
     if (knew == *k - 1 || *k == 12) {
         *phase1 = false;
     }
@@ -681,7 +680,7 @@ void de(const fn_type f,
            direction of integration and initialize the step size */
         self->start = true;
         self->x = *t;
-        copy_double_array(yy, y, (size_t)neqn);
+        copy_double_array(yy, y, neqn);
         self->delsgn = copysign(1.0, del);
         self->h = copysign(max(fabs(tout - self->x),
                                4.0 * DBL_EPSILON * fabs(self->x)),
@@ -722,7 +721,7 @@ void de(const fn_type f,
             if (stiff) {
                 *iflag = isn ? 5 : -5;
             }
-            copy_double_array(y, yy, (size_t)neqn);
+            copy_double_array(y, yy, neqn);
             *t = self->x;
             self->told = *t;
             self->isnold = true;
@@ -740,7 +739,7 @@ void de(const fn_type f,
             *iflag = isn ? 3 : -3;
             *relerr = eps * releps;
             *abserr = eps * abseps;
-            copy_double_array(y, yy, (size_t)neqn);
+            copy_double_array(y, yy, neqn);
             *t = self->x;
             self->told = *t;
             self->isnold = true;
