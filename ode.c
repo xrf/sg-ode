@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include "ode.h"
 
-typedef void (*func_type)(void *, double, const double *, double *);
+typedef void (*fn_type)(void *, double, const double *, double *);
 
 static double min(double x, double y)
 {
@@ -28,22 +28,41 @@ static double max(double x, double y)
   included to control roundoff error and to detect when the user is requesting
   too much accuracy.
 
-  @param x Independent variable
-  @param y Solution vector at `x` (length: `neqn`)
-  @param yp Derivative of solution vector at `x` after successful
-            step (length: `neqn`)
-  @param neqn Number of equations to be integrated
-  @param h Appropriate step size for next step.  Normally determined by
-           code
-  @param eps Local error tolerance.  Must be variable (length: `1`)
-  @param wt Vector of weights for error criterion (length: `neqn`)
-  @param start Boolean variable set `true` for first step, `false`
-               otherwise
-  @param hold Step size used for last successful step
-  @param k Appropriate order for next step (determined by code)
-  @param kold Order used for last successful step
-  @param crash Boolean variable set `true` when no step can be taken,
-               `false` otherwise.
+  @param x
+  Independent variable
+
+  @param y
+  Solution vector at `x` (length: `neqn`)
+
+  @param yp
+  Derivative of solution vector at `x` after successful step (length: `neqn`)
+
+  @param neqn
+  Number of equations to be integrated
+
+  @param h
+  Appropriate step size for next step.  Normally determined by code
+
+  @param eps
+  Local error tolerance.  Must be variable (length: `1`)
+
+  @param wt
+  Vector of weights for error criterion (length: `neqn`)
+
+  @param start
+  Boolean variable set `true` for first step, `false` otherwise
+
+  @param hold
+  Step size used for last successful step
+
+  @param k
+  Appropriate order for next step (determined by code)
+
+  @param kold
+  Order used for last successful step
+
+  @return
+  Nonzero when no step can be taken, zero otherwise (`crash`).
 
   The arrays `phi`, `psi` are required for the interpolation subroutine
   `intrp`.  The array `p` is internal to the code.
@@ -52,43 +71,43 @@ static double max(double x, double y)
 
   ## First call
 
-  The user must provide storage in his driver program for all arrays in the
+  The user must provide storage in their driver program for all arrays in the
   call list, namely
 
-      y[neqn], wt[neqn], phi[neqn * 16], p[neqn], yp[neqn], psi[12]
+  y[neqn], wt[neqn], phi[neqn * 16], p[neqn], yp[neqn], psi[12]
 
-  The user must also declare `start` and `crash` Boolean variables and `f` an
-  external subroutine, supply the subroutine `f(f_ctx, x, y, yp)` to evaluate
+  The user must also declare the `start` Boolean variable and `f` an external
+  subroutine, supply the subroutine `f(f_ctx, x, y, yp)` to evaluate
 
-      dy[i]/dx = yp[i] = f(x, y[0], y[1], ..., y[neqn - 1])
+  dy[i]/dx = yp[i] = f(x, y[0], y[1], ..., y[neqn - 1])
 
   and initialize only the following parameters:
 
-      x -- initial value of the independent variable
-      y[] -- vector of initial values of dependent variables
-      neqn -- number of equations to be integrated
-      h -- nominal step size indicating direction of integration
-           and maximum size of step.  must be variable
-      eps -- local error tolerance per step.  must be variable
-      wt[] -- vector of non-zero weights for error criterion
-      start -- .true.
+  x -- initial value of the independent variable
+  y[] -- vector of initial values of dependent variables
+  neqn -- number of equations to be integrated
+  h -- nominal step size indicating direction of integration
+  and maximum size of step.  must be variable
+  eps -- local error tolerance per step.  must be variable
+  wt[] -- vector of non-zero weights for error criterion
+  start -- .true.
 
   `step` requires the L2 norm of the vector with components
   `local_error[l] / wt[l]` be less than `eps` for a successful step.  The
-  array `wt` allows the user to specify an error test appropriate for his
+  array `wt` allows the user to specify an error test appropriate for their
   problem.  For example,
 
-      wt[l] = 1.0  specifies absolute error,
-            = fabs(y[l])  error relative to the most recent value of
-                          the l-th component of the solution,
-            = fabs(yp[l])  error relative to the most recent value of
-                           the l-th component of the derivative,
-            = max(wt[l], fabs(y[l]))  error relative to the largest magnitude
-                                      of l-th component obtained so far,
-            = fabs(y(l)) * relerr / eps + abserr / eps
-                 specifies a mixed relative-absolute test where relerr is
-                 relative error, abserr is absolute error and
-                 eps = max(relerr, abserr) .
+  wt[l] = 1.0  specifies absolute error,
+  = fabs(y[l])  error relative to the most recent value of
+  the l-th component of the solution,
+  = fabs(yp[l])  error relative to the most recent value of
+  the l-th component of the derivative,
+  = max(wt[l], fabs(y[l]))  error relative to the largest magnitude
+  of l-th component obtained so far,
+  = fabs(y(l)) * relerr / eps + abserr / eps
+  specifies a mixed relative-absolute test where relerr is
+  relative error, abserr is absolute error and
+  eps = max(relerr, abserr) .
 
   ## Subsequent calls
 
@@ -109,33 +128,53 @@ static double max(double x, double y)
 
   ## Successful step
 
-  The subroutine returns after each successful step with `start` and `crash`
+  The subroutine returns zero after each successful step with `start`
   set to `false`.  `x` represents the independent variable advanced one step
   of length hold from its value on input and `y` the solution vector at the
   new value of `x`.  All other parameters represent information corresponding
   to the new `x` needed to continue the integration.
 
-  ## unsuccessful step
+  ## Unsuccessful step
 
   When the error tolerance is too small for the machine precision, the
-  subroutine returns without taking a step and `crash = true`.  An appropriate
-  step size and error tolerance for continuing are estimated and all other
-  information is restored as upon input before returning.  To continue with
-  the larger tolerance, the user just calls the code again.  A restart is
-  neither required nor desirable.
+  subroutine returns nonzero without taking a step.  An appropriate step size
+  and error tolerance for continuing are estimated and all other information
+  is restored as upon input before returning.  To continue with the larger
+  tolerance, the user just calls the code again.  A restart is neither
+  required nor desirable.
 */
-int step(double *x, double *y, func_type f, void *f_ctx, int neqn,
-         double *h__, double *eps, double *wt, bool *start,
-         double *hold, int *k, int *kold, bool *crash,
-         double *phi, double *p, double *yp, double *psi,
-         double *alpha, double *beta, double *sig, double *v,
-         double *w, double *g, bool *phase1, int *ns, bool *nornd)
+int step(double *const x,
+         double *y,
+         const fn_type f,
+         void *const f_ctx,
+         const int neqn,
+         double *const h__,
+         double *const eps,
+         double *wt,
+         bool *const start,
+         double *const hold,
+         int *const k,
+         int *const kold,
+         double *phi,
+         double *p,
+         double *yp,
+         double *psi,
+         double *alpha,
+         double *beta,
+         double *sig,
+         double *v,
+         double *w,
+         double *g,
+         bool *const phase1,
+         int *const ns,
+         bool *const nornd)
 {
-    static const double gstr[13] = {.5, .0833, .0417, .0264, .0188, .0143, .0114,
-                                    .00936, .00789, .00679, .00592, .00524, .00468};
+    static const double gstr[13] = {
+        .5, .0833, .0417, .0264, .0188, .0143, .0114,
+        .00936, .00789, .00679, .00592, .00524, .00468};
 
     /* System generated locals */
-    int phi_dim1, phi_offset, i__1, i__2;
+    int i__1, i__2;
     double d__1, d__2, d__3;
 
     /* Local variables */
@@ -146,20 +185,17 @@ int step(double *x, double *y, func_type f, void *f_ctx, int neqn,
     static int nsm2, nsp1, nsp2;
     static double absh, hnew;
     static int knew;
-    static double xold, twou, erkm1, erkm2, erkp1, temp1, temp2, temp3,
+    static double xold, erkm1, erkm2, erkp1, temp1, temp2, temp3,
         temp4, temp5, temp6, p5eps;
     static int ifail;
     static double reali, round;
-    static double fouru;
     static int limit1, limit2;
     static double realns;
 
     /* Parameter adjustments */
     --yp;
     --p;
-    phi_dim1 = neqn;
-    phi_offset = 1 + phi_dim1;
-    phi -= phi_offset;
+    phi -= 1 + neqn;
     --wt;
     --y;
     --psi;
@@ -171,96 +207,73 @@ int step(double *x, double *y, func_type f, void *f_ctx, int neqn,
     --g;
 
     /* Function Body */
-    /*     data g(1),g(2)/1.0,0.5/,sig(1)/1.0/ */
 
-    twou = 2.f * DBL_EPSILON;
-    fouru = twou * 2.f;
-    /*       ***     begin block 0     *** */
-    /*   check if step size or error tolerance is too small for machine */
-    /*   precision.  if first step, initialize phi array and estimate a */
-    /*   starting step size. */
-    /*                   *** */
+    /**** begin block 0 ****/
+    /* check if step size or error tolerance is too small for machine
+       precision.  if first step, initialize phi array and estimate a starting
+       step size. */
 
-    /*   if step size is too small, determine an acceptable one */
-
-    *crash = true;
-    if (fabs(*h__) < fouru * fabs(*x)) {
-        d__1 = fouru * fabs(*x);
+    /* if step size is too small, determine an acceptable one */
+    if (fabs(*h__) < 4.0 * DBL_EPSILON * fabs(*x)) {
+        d__1 = 4.0 * DBL_EPSILON * fabs(*x);
         *h__ = copysign(d__1, *h__);
-        return 0;
+        return 1;
     }
     p5eps = *eps * .5;
 
-    /*   if error tolerance is too small, increase it to an acceptable value */
-
+    /* if error tolerance is too small, increase it to an acceptable value */
     round = 0.;
     i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
-        /* L10: */
-        /* Computing 2nd power */
-        d__1 = y[l] / wt[l];
-        round += d__1 * d__1;
+        round += pow(y[l] / wt[l], 2.0);
     }
-    round = twou * sqrt(round);
-    if (p5eps >= round) {
-        goto L15;
+    round = 2.0 * DBL_EPSILON * sqrt(round);
+    if (p5eps < round) {
+        *eps = round * 2.f * (4.0 * DBL_EPSILON + 1.);
+        return 1;
     }
-    *eps = round * 2.f * (fouru + 1.);
-    return 0;
-L15:
-    *crash = false;
     g[1] = 1.;
     g[2] = .5;
     sig[1] = 1.;
-    if (!(*start)) {
-        goto L99;
-    }
+    if (*start) {
 
-    /*   initialize.  compute appropriate step size for first step */
-
-    (*f)(f_ctx, *x, &y[1], &yp[1]);
-    sum = 0.;
-    i__1 = neqn;
-    for (l = 1; l <= i__1; ++l) {
-        phi[l + phi_dim1] = yp[l];
-        phi[l + (phi_dim1 << 1)] = 0.;
-        /* L20: */
-        /* Computing 2nd power */
-        d__1 = yp[l] / wt[l];
-        sum += d__1 * d__1;
+        /* initialize.  compute appropriate step size for first step */
+        (*f)(f_ctx, *x, &y[1], &yp[1]);
+        sum = 0.;
+        i__1 = neqn;
+        for (l = 1; l <= i__1; ++l) {
+            phi[l + neqn] = yp[l];
+            phi[l + (neqn * 2)] = 0.;
+            sum += pow(yp[l] / wt[l], 2.0);
+        }
+        sum = sqrt(sum);
+        absh = fabs(*h__);
+        if (*eps < sum * 16. * *h__ * *h__) {
+            absh = sqrt(*eps / sum) * .25;
+        }
+        /* Computing MAX */
+        *h__ = copysign(max(absh, 4.0 * DBL_EPSILON * fabs(*x)), *h__);
+        *hold = 0.;
+        *k = 1;
+        *kold = 0;
+        *start = false;
+        *phase1 = true;
+        *nornd = true;
+        if (p5eps <= round * 100.) {
+            *nornd = false;
+            i__1 = neqn;
+            for (l = 1; l <= i__1; ++l) {
+                /* L25: */
+                phi[l + neqn * 15] = 0.;
+            }
+        }
     }
-    sum = sqrt(sum);
-    absh = fabs(*h__);
-    if (*eps < sum * 16. * *h__ * *h__) {
-        absh = sqrt(*eps / sum) * .25;
-    }
-    /* Computing MAX */
-    d__2 = absh, d__3 = fouru * fabs(*x);
-    d__1 = max(d__2, d__3);
-    *h__ = copysign(d__1, *h__);
-    *hold = 0.;
-    *k = 1;
-    *kold = 0;
-    *start = false;
-    *phase1 = true;
-    *nornd = true;
-    if (p5eps > round * 100.) {
-        goto L99;
-    }
-    *nornd = false;
-    i__1 = neqn;
-    for (l = 1; l <= i__1; ++l) {
-        /* L25: */
-        phi[l + phi_dim1 * 15] = 0.;
-    }
-L99:
     ifail = 0;
-/*       ***     end block 0     *** */
+    /**** end block 0 ****/
 
-/*       ***     begin block 1     *** */
-/*   compute coefficients of formulas for this step.  avoid computing */
-/*   those quantities not changed when step size is not changed. */
-/*                   *** */
+    /**** begin block 1 ****/
+    /* compute coefficients of formulas for this step.  avoid computing */
+    /* those quantities not changed when step size is not changed. */
 
 L100:
     kp1 = *k + 1;
@@ -268,8 +281,8 @@ L100:
     km1 = *k - 1;
     km2 = *k - 2;
 
-    /*   ns is the number of steps taken with size h, including the current */
-    /*   one.  when k.lt.ns, no coefficients change */
+    /* ns is the number of steps taken with size h, including the current one.
+       when k.lt.ns, no coefficients change */
 
     if (*h__ != *hold) {
         *ns = 0;
@@ -278,135 +291,116 @@ L100:
         ++(*ns);
     }
     nsp1 = *ns + 1;
-    if (*k < *ns) {
-        goto L199;
-    }
+    if (*k >= *ns) {
 
-    /*   compute those components of alpha(*),beta(*),psi(*),sig(*) which */
-    /*   are changed */
+        /* compute those components of alpha[], beta[], psi[], sig[] which are
+           changed */
 
-    beta[*ns] = 1.;
-    realns = (double)(*ns);
-    alpha[*ns] = 1. / realns;
-    temp1 = *h__ * realns;
-    sig[nsp1] = 1.;
-    if (*k < nsp1) {
-        goto L110;
-    }
-    i__1 = *k;
-    for (i__ = nsp1; i__ <= i__1; ++i__) {
-        im1 = i__ - 1;
-        temp2 = psi[im1];
-        psi[im1] = temp1;
-        beta[i__] = beta[im1] * psi[im1] / temp2;
-        temp1 = temp2 + *h__;
-        alpha[i__] = *h__ / temp1;
-        reali = (double)i__;
-        /* L105: */
-        sig[i__ + 1] = reali * alpha[i__] * sig[i__];
-    }
-L110:
-    psi[*k] = temp1;
-
-    /*   compute coefficients g(*) */
-
-    /*   initialize v(*) and set w(*).  g(2) is set in data statement */
-
-    if (*ns > 1) {
-        goto L120;
-    }
-    i__1 = *k;
-    for (iq = 1; iq <= i__1; ++iq) {
-        temp3 = (double)(iq * (iq + 1));
-        v[iq] = 1. / temp3;
-        /* L115: */
-        w[iq] = v[iq];
-    }
-    goto L140;
-
-/*   if order was raised, update diagonal part of v(*) */
-
-L120:
-    if (*k <= *kold) {
-        goto L130;
-    }
-    temp4 = (double)(*k * kp1);
-    v[*k] = 1. / temp4;
-    nsm2 = *ns - 2;
-    if (nsm2 < 1) {
-        goto L130;
-    }
-    i__1 = nsm2;
-    for (j = 1; j <= i__1; ++j) {
-        i__ = *k - j;
-        /* L125: */
-        v[i__] -= alpha[j + 1] * v[i__ + 1];
-    }
-
-/*   update v(*) and set w(*) */
-
-L130:
-    limit1 = kp1 - *ns;
-    temp5 = alpha[*ns];
-    i__1 = limit1;
-    for (iq = 1; iq <= i__1; ++iq) {
-        v[iq] -= temp5 * v[iq + 1];
-        /* L135: */
-        w[iq] = v[iq];
-    }
-    g[nsp1] = w[1];
-
-/*   compute the g(*) in the work vector w(*) */
-
-L140:
-    nsp2 = *ns + 2;
-    if (kp1 < nsp2) {
-        goto L199;
-    }
-    i__1 = kp1;
-    for (i__ = nsp2; i__ <= i__1; ++i__) {
-        limit2 = kp2 - i__;
-        temp6 = alpha[i__ - 1];
-        i__2 = limit2;
-        for (iq = 1; iq <= i__2; ++iq) {
-            /* L145: */
-            w[iq] -= temp6 * w[iq + 1];
+        beta[*ns] = 1.;
+        realns = (double)(*ns);
+        alpha[*ns] = 1. / realns;
+        temp1 = *h__ * realns;
+        sig[nsp1] = 1.;
+        if (*k >= nsp1) {
+            i__1 = *k;
+            for (i__ = nsp1; i__ <= i__1; ++i__) {
+                im1 = i__ - 1;
+                temp2 = psi[im1];
+                psi[im1] = temp1;
+                beta[i__] = beta[im1] * psi[im1] / temp2;
+                temp1 = temp2 + *h__;
+                alpha[i__] = *h__ / temp1;
+                reali = (double)i__;
+                /* L105: */
+                sig[i__ + 1] = reali * alpha[i__] * sig[i__];
+            }
         }
-        /* L150: */
-        g[i__] = w[1];
+        psi[*k] = temp1;
+
+        /* compute coefficients g[] */
+
+        /* initialize v[] and set w[].  g(2) is set in data statement */
+
+        if (*ns <= 1) {
+            i__1 = *k;
+            for (iq = 1; iq <= i__1; ++iq) {
+                temp3 = (double)(iq * (iq + 1));
+                v[iq] = 1. / temp3;
+                /* L115: */
+                w[iq] = v[iq];
+            }
+            goto L140;
+        }
+        /* if order was raised, update diagonal part of v[] */
+        if (*k > *kold) {
+            temp4 = (double)(*k * kp1);
+            v[*k] = 1. / temp4;
+            nsm2 = *ns - 2;
+            if (nsm2 >= 1) {
+                i__1 = nsm2;
+                for (j = 1; j <= i__1; ++j) {
+                    i__ = *k - j;
+                    /* L125: */
+                    v[i__] -= alpha[j + 1] * v[i__ + 1];
+                }
+            }
+        }
+        /* update v[] and set w[] */
+        limit1 = kp1 - *ns;
+        temp5 = alpha[*ns];
+        i__1 = limit1;
+        for (iq = 1; iq <= i__1; ++iq) {
+            v[iq] -= temp5 * v[iq + 1];
+            /* L135: */
+            w[iq] = v[iq];
+        }
+        g[nsp1] = w[1];
+
+    /* compute the g[] in the work vector w[] */
+
+    L140:
+        nsp2 = *ns + 2;
+        if (kp1 >= nsp2) {
+            i__1 = kp1;
+            for (i__ = nsp2; i__ <= i__1; ++i__) {
+                limit2 = kp2 - i__;
+                temp6 = alpha[i__ - 1];
+                i__2 = limit2;
+                for (iq = 1; iq <= i__2; ++iq) {
+                    /* L145: */
+                    w[iq] -= temp6 * w[iq + 1];
+                }
+                /* L150: */
+                g[i__] = w[1];
+            }
+        }
     }
-L199:
     /*       ***     end block 1     *** */
 
     /*       ***     begin block 2     *** */
-    /*   predict a solution p(*), evaluate derivatives using predicted */
+    /*   predict a solution p[], evaluate derivatives using predicted */
     /*   solution, estimate local error at order k and errors at orders k, */
     /*   k-1, k-2 as if constant step size were used. */
     /*                   *** */
 
     /*   change phi to phi star */
-
-    if (*k < nsp1) {
-        goto L215;
-    }
-    i__1 = *k;
-    for (i__ = nsp1; i__ <= i__1; ++i__) {
-        temp1 = beta[i__];
-        i__2 = neqn;
-        for (l = 1; l <= i__2; ++l) {
-            /* L205: */
-            phi[l + i__ * phi_dim1] = temp1 * phi[l + i__ * phi_dim1];
+    if (*k >= nsp1) {
+        i__1 = *k;
+        for (i__ = nsp1; i__ <= i__1; ++i__) {
+            temp1 = beta[i__];
+            i__2 = neqn;
+            for (l = 1; l <= i__2; ++l) {
+                /* L205: */
+                phi[l + i__ * neqn] = temp1 * phi[l + i__ * neqn];
+            }
+            /* L210: */
         }
-        /* L210: */
     }
-
-/*   predict solution and differences */
-
-L215:
+    /*   predict solution and differences */
     i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
-        phi[l + kp2 * phi_dim1] = phi[l + kp1 * phi_dim1];
-        phi[l + kp1 * phi_dim1] = 0.;
+        phi[l + kp2 * neqn] = phi[l + kp1 * neqn];
+        phi[l + kp1 * neqn] = 0.;
         /* L220: */
         p[l] = 0.;
     }
@@ -417,9 +411,9 @@ L215:
         temp2 = g[i__];
         i__2 = neqn;
         for (l = 1; l <= i__2; ++l) {
-            p[l] += temp2 * phi[l + i__ * phi_dim1];
+            p[l] += temp2 * phi[l + i__ * neqn];
             /* L225: */
-            phi[l + i__ * phi_dim1] += phi[l + ip1 * phi_dim1];
+            phi[l + i__ * neqn] += phi[l + ip1 * neqn];
         }
         /* L230: */
     }
@@ -428,10 +422,10 @@ L215:
     }
     i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
-        tau = *h__ * p[l] - phi[l + phi_dim1 * 15];
+        tau = *h__ * p[l] - phi[l + neqn * 15];
         p[l] = y[l] + tau;
         /* L235: */
-        phi[l + (phi_dim1 << 4)] = p[l] - y[l] - tau;
+        phi[l + (neqn * 16)] = p[l] - y[l] - tau;
     }
     goto L250;
 L240:
@@ -454,7 +448,7 @@ L250:
     i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
         temp3 = 1. / wt[l];
-        temp4 = yp[l] - phi[l + phi_dim1];
+        temp4 = yp[l] - phi[l + neqn];
         if (km2 < 0) {
             goto L265;
         } else if (km2 == 0) {
@@ -464,11 +458,11 @@ L250:
         }
     L255:
         /* Computing 2nd power */
-        d__1 = (phi[l + km1 * phi_dim1] + temp4) * temp3;
+        d__1 = (phi[l + km1 * neqn] + temp4) * temp3;
         erkm2 += d__1 * d__1;
     L260:
         /* Computing 2nd power */
-        d__1 = (phi[l + *k * phi_dim1] + temp4) * temp3;
+        d__1 = (phi[l + *k * neqn] + temp4) * temp3;
         erkm1 += d__1 * d__1;
     L265:
         /* Computing 2nd power */
@@ -494,40 +488,32 @@ L280:
 
     /*   test if order should be lowered */
 
-    if (km2 < 0) {
-        goto L299;
-    } else if (km2 == 0) {
-        goto L290;
-    } else {
-        goto L285;
-    }
-L285:
-    if (max(erkm1, erkm2) <= erk) {
-        knew = km1;
-    }
-    goto L299;
-L290:
-    if (erkm1 <= erk * .5) {
-        knew = km1;
+    if (km2 == 0) {
+        if (erkm1 <= erk * .5) {
+            knew = km1;
+        }
+    } else if (km2 > 0) {
+        if (max(erkm1, erkm2) <= erk) {
+            knew = km1;
+        }
     }
 
-/*   test if step successful */
+    /*   test if step successful */
 
-L299:
     if (err <= *eps) {
         goto L400;
     }
     /*       ***     end block 2     *** */
 
     /*       ***     begin block 3     *** */
-    /*   the step is unsuccessful.  restore  x, phi(*,*), psi(*) . */
+    /*   the step is unsuccessful.  restore  x, phi[], psi[] . */
     /*   if third consecutive failure, set order to one.  if step fails more */
     /*   than three times, consider an optimal step size.  double error */
     /*   tolerance and return if estimated step size is too small for machine */
     /*   precision. */
     /*                   *** */
 
-    /*   restore x, phi(*,*) and psi(*) */
+    /*   restore x, phi[] and psi[] */
 
     *phase1 = false;
     *x = xold;
@@ -538,7 +524,7 @@ L299:
         i__2 = neqn;
         for (l = 1; l <= i__2; ++l) {
             /* L305: */
-            phi[l + i__ * phi_dim1] = temp1 * (phi[l + i__ * phi_dim1] - phi[l + ip1 * phi_dim1]);
+            phi[l + i__ * neqn] = temp1 * (phi[l + i__ * neqn] - phi[l + ip1 * neqn]);
         }
         /* L310: */
     }
@@ -573,15 +559,12 @@ L330:
 L335:
     *h__ = temp2 * *h__;
     *k = knew;
-    if (fabs(*h__) >= fouru * fabs(*x)) {
-        goto L340;
+    if (fabs(*h__) < 4.0 * DBL_EPSILON * fabs(*x)) {
+        d__1 = 4.0 * DBL_EPSILON * fabs(*x);
+        *h__ = copysign(d__1, *h__);
+        *eps += *eps;
+        return 1;
     }
-    *crash = true;
-    d__1 = fouru * fabs(*x);
-    *h__ = copysign(d__1, *h__);
-    *eps += *eps;
-    return 0;
-L340:
     goto L100;
 /*       ***     end block 3     *** */
 
@@ -602,17 +585,17 @@ L400:
     }
     i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
-        rho = temp1 * (yp[l] - phi[l + phi_dim1]) - phi[l + (phi_dim1 << 4)];
+        rho = temp1 * (yp[l] - phi[l + neqn]) - phi[l + (neqn * 16)];
         y[l] = p[l] + rho;
         /* L405: */
-        phi[l + phi_dim1 * 15] = y[l] - p[l] - rho;
+        phi[l + neqn * 15] = y[l] - p[l] - rho;
     }
     goto L420;
 L410:
     i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
         /* L415: */
-        y[l] = p[l] + temp1 * (yp[l] - phi[l + phi_dim1]);
+        y[l] = p[l] + temp1 * (yp[l] - phi[l + neqn]);
     }
 L420:
     (*f)(f_ctx, *x, &y[1], &yp[1]);
@@ -621,16 +604,16 @@ L420:
 
     i__1 = neqn;
     for (l = 1; l <= i__1; ++l) {
-        phi[l + kp1 * phi_dim1] = yp[l] - phi[l + phi_dim1];
+        phi[l + kp1 * neqn] = yp[l] - phi[l + neqn];
         /* L425: */
-        phi[l + kp2 * phi_dim1] = phi[l + kp1 * phi_dim1] - phi[l + kp2 * phi_dim1];
+        phi[l + kp2 * neqn] = phi[l + kp1 * neqn] - phi[l + kp2 * neqn];
     }
     i__1 = *k;
     for (i__ = 1; i__ <= i__1; ++i__) {
         i__2 = neqn;
         for (l = 1; l <= i__2; ++l) {
             /* L430: */
-            phi[l + i__ * phi_dim1] += phi[l + kp1 * phi_dim1];
+            phi[l + i__ * neqn] += phi[l + kp1 * neqn];
         }
         /* L435: */
     }
@@ -657,7 +640,7 @@ L420:
     for (l = 1; l <= i__1; ++l) {
         /* L440: */
         /* Computing 2nd power */
-        d__1 = phi[l + kp2 * phi_dim1] / wt[l];
+        d__1 = phi[l + kp2 * neqn] / wt[l];
         erkp1 += d__1 * d__1;
     }
     erkp1 = absh * gstr[kp1 - 1] * sqrt(erkp1);
@@ -718,13 +701,13 @@ L460:
     d__1 = .5, d__2 = min(.9, r__);
     hnew = absh * max(d__1, d__2);
     /* Computing MAX */
-    d__2 = hnew, d__3 = fouru * fabs(*x);
+    d__2 = hnew, d__3 = 4.0 * DBL_EPSILON * fabs(*x);
     d__1 = max(d__2, d__3);
     hnew = copysign(d__1, *h__);
 L465:
     *h__ = hnew;
-    return 0;
     /*       ***     end block 4     *** */
+    return 0;
 }
 
 /*
@@ -743,15 +726,21 @@ L465:
 
   # Output from `intrp`
 
-      yout[] -- Solution at `xout`
-      ypout[] -- Derivative of solution at `xout`
+  yout[] -- Solution at `xout`
+  ypout[] -- Derivative of solution at `xout`
 
   The remaining parameters are returned unaltered from their input values.
   Integration with `step` may be continued.
 */
-int intrp(double *x, double *y, double xout,
-          double *yout, double *ypout, int neqn, int *kold,
-          double *phi, double *psi)
+void intrp(double *const x,
+           double *y,
+           const double xout,
+           double *yout,
+           double *ypout,
+           const int neqn,
+           int *const kold,
+           double *phi,
+           double *psi)
 {
     /* Initialized data */
 
@@ -759,7 +748,7 @@ int intrp(double *x, double *y, double xout,
     static double rho[13] = {1.};
 
     /* System generated locals */
-    int phi_dim1, phi_offset, i__1, i__2;
+    int i__1, i__2;
 
     /* Local variables */
     static int i__, j, l;
@@ -772,9 +761,7 @@ int intrp(double *x, double *y, double xout,
     static double psijm1;
 
     /* Parameter adjustments */
-    phi_dim1 = neqn;
-    phi_offset = 1 + phi_dim1;
-    phi -= phi_offset;
+    phi -= 1 + neqn;
     --ypout;
     --yout;
     --y;
@@ -786,7 +773,7 @@ int intrp(double *x, double *y, double xout,
     ki = *kold + 1;
     kip1 = ki + 1;
 
-    /*   initialize w(*) for computing g(*) */
+    /*   initialize w[] for computing g[] */
 
     i__1 = ki;
     for (i__ = 1; i__ <= i__1; ++i__) {
@@ -796,7 +783,7 @@ int intrp(double *x, double *y, double xout,
     }
     term = 0.;
 
-    /*   compute g(*) */
+    /*   compute g[] */
 
     i__1 = ki;
     for (j = 2; j <= i__1; ++j) {
@@ -831,9 +818,9 @@ int intrp(double *x, double *y, double xout,
         temp3 = rho[i__ - 1];
         i__2 = neqn;
         for (l = 1; l <= i__2; ++l) {
-            yout[l] += temp2 * phi[l + i__ * phi_dim1];
+            yout[l] += temp2 * phi[l + i__ * neqn];
             /* L25: */
-            ypout[l] += temp3 * phi[l + i__ * phi_dim1];
+            ypout[l] += temp3 * phi[l + i__ * neqn];
         }
         /* L30: */
     }
@@ -842,7 +829,6 @@ int intrp(double *x, double *y, double xout,
         /* L35: */
         yout[l] = y[l] + hi * yout[l];
     }
-    return 0;
 }
 
 /*
@@ -853,32 +839,59 @@ int intrp(double *x, double *y, double xout,
   The constant `maxnum` is the maximum number of steps allowed in one call to
   `de`.
 */
-int de(func_type f, void *f_ctx, int neqn, double *y, double *t,
-       double tout, double *relerr, double *abserr, int *iflag,
-       double *yy, double *wt, double *p, double *yp,
-       double *ypout, double *phi, double *alpha, double *beta,
-       double *sig, double *v, double *w, double *g,
-       bool *phase1, double *psi, double *x, double *h__,
-       double *hold, bool *start, double *told, double *delsgn,
-       int *ns, bool *nornd, int *k, int *kold, int *isnold, int maxnum)
+void de(const fn_type f,
+        void *const f_ctx,
+        const int neqn,
+        double *y,
+        double *const t,
+        const double tout,
+        double *const relerr,
+        double *const abserr,
+        int *const iflag,
+        double *yy,
+        double *wt,
+        double *p,
+        double *yp,
+        double *ypout,
+        double *const phi,
+        double *alpha,
+        double *beta,
+        double *sig,
+        double *v,
+        double *w,
+        double *g,
+        bool *const phase1,
+        double *psi,
+        double *const x,
+        double *const h__,
+        double *const hold,
+        bool *const start,
+        double *const told,
+        double *const delsgn,
+        int *const ns,
+        bool *const nornd,
+        int *const k,
+        int *const kold,
+        int *const isnold,
+        const int maxnum)
 {
     /* System generated locals */
-    int phi_dim1, phi_offset, i__1;
+    int i__1;
     double d__1, d__2, d__3, d__4, d__5;
 
     /* Local variables */
-    static int l;
-    static double del, eps;
-    static int isn, kle4;
-    static double tend;
-    static bool crash, stiff;
-    static double fouru, absdel, abseps, releps;
-    static int nostep;
+    int l;
+
+    double del, absdel, tend;
+    double eps;
+    int kle4;
+    bool stiff;
+    double abseps, releps;
+    int nostep;
+
+    const int isn = *iflag >= 0 ? 1 : -1;
 
     /* Parameter adjustments */
-    phi_dim1 = neqn;
-    phi_offset = 1 + phi_dim1;
-    phi -= phi_offset;
     --ypout;
     --yp;
     --p;
@@ -895,56 +908,23 @@ int de(func_type f, void *f_ctx, int neqn, double *y, double *t,
 
     /* Function Body */
 
-    /*            ***            ***            *** */
     /*   test for improper parameters */
-
-    fouru = 4.f * DBL_EPSILON;
-    if (neqn < 1) {
-        goto L10;
-    }
-    if (*t == tout) {
-        goto L10;
-    }
-    if (*relerr < 0. || *abserr < 0.) {
-        goto L10;
-    }
     eps = max(*relerr, *abserr);
-    if (eps <= 0.) {
-        goto L10;
-    }
-    if (*iflag == 0) {
-        goto L10;
-    }
-    if (*iflag >= 0) {
-        isn = 1;
-    } else {
-        isn = -1;
-    }
     *iflag = abs(*iflag);
-    if (*iflag == 1) {
-        goto L20;
+    if (neqn < 1 || *t == tout ||
+        *relerr < 0. || *abserr < 0. ||
+        eps <= 0. || *iflag == 0 ||
+        (*iflag != 1 && (*t != *told || *iflag < 2 || *iflag > 5))) {
+        *iflag = 6;
+        return;
     }
-    if (*t != *told) {
-        goto L10;
-    }
-    if (*iflag >= 2 && *iflag <= 5) {
-        goto L20;
-    }
-L10:
-    *iflag = 6;
-    return 0;
 
-/*   on each call set interval of integration and counter for number of */
-/*   steps.  adjust input error tolerances to define weight vector for */
-/*   subroutine  step */
-
-L20:
+    /*   on each call set interval of integration and counter for number of */
+    /*   steps.  adjust input error tolerances to define weight vector for */
+    /*   subroutine  step */
     del = tout - *t;
     absdel = fabs(del);
-    tend = *t + del * 10.;
-    if (isn < 0) {
-        tend = tout;
-    }
+    tend = isn < 0 ? tout : *t + del * 10.0;
     nostep = 0;
     kle4 = 0;
     stiff = false;
@@ -960,7 +940,7 @@ L20:
         goto L50;
     }
 
-/*   on start and restart also set work variables x and yy(*), store the */
+/*   on start and restart also set work variables x and yy[], store the */
 /*   direction of integration and initialize the step size */
 
 L30:
@@ -973,7 +953,9 @@ L30:
     }
     *delsgn = copysign(1.0, del);
     /* Computing MAX */
-    d__3 = (d__1 = tout - *x, fabs(d__1)), d__4 = fouru * fabs(*x);
+    d__1 = tout - *x;
+    d__3 = fabs(d__1);
+    d__4 = 4.0 * DBL_EPSILON * fabs(*x);
     d__2 = max(d__3, d__4);
     d__5 = tout - *x;
     *h__ = copysign(d__2, d__5);
@@ -984,18 +966,18 @@ L50:
     if ((d__1 = *x - *t, fabs(d__1)) < absdel) {
         goto L60;
     }
-    intrp(x, &yy[1], tout, &y[1], &ypout[1], neqn, kold, &phi[phi_offset], &psi[1]);
+    intrp(x, &yy[1], tout, &y[1], &ypout[1], neqn, kold, phi, &psi[1]);
     *iflag = 2;
     *t = tout;
     *told = *t;
     *isnold = isn;
-    return 0;
+    return;
 
 /*   if cannot go past output point and sufficiently close, */
 /*   extrapolate and return */
 
 L60:
-    if (isn > 0 || (d__1 = tout - *x, fabs(d__1)) >= fouru * fabs(*x)) {
+    if (isn > 0 || (d__1 = tout - *x, fabs(d__1)) >= 4.0 * DBL_EPSILON * fabs(*x)) {
         goto L80;
     }
     *h__ = tout - *x;
@@ -1009,7 +991,7 @@ L60:
     *t = tout;
     *told = *t;
     *isnold = isn;
-    return 0;
+    return;
 
 /*   test for too many steps */
 
@@ -1017,7 +999,7 @@ L80:
     if (nostep < maxnum) {
         goto L100;
     }
-    *iflag = isn << 2;
+    *iflag = isn * 4;
     if (stiff) {
         *iflag = isn * 5;
     }
@@ -1029,7 +1011,7 @@ L80:
     *t = *x;
     *told = *t;
     *isnold = 1;
-    return 0;
+    return;
 
 /*   limit step size, set weight vector and take a step */
 
@@ -1043,29 +1025,23 @@ L100:
         /* L110: */
         wt[l] = releps * (d__1 = yy[l], fabs(d__1)) + abseps;
     }
-    step(x, &yy[1], f, f_ctx, neqn, h__, &eps, &wt[1], start, hold, k, kold, &crash, &phi[phi_offset], &p[1], &yp[1], &psi[1], &alpha[1], &beta[1], &sig[1], &v[1], &w[1], &g[1], phase1, ns, nornd);
 
     /*   test for tolerances too small */
-
-    if (!crash) {
-        goto L130;
+    if (step(x, &yy[1], f, f_ctx, neqn, h__, &eps, &wt[1], start, hold, k, kold, phi, &p[1], &yp[1], &psi[1], &alpha[1], &beta[1], &sig[1], &v[1], &w[1], &g[1], phase1, ns, nornd)) {
+        *iflag = isn * 3;
+        *relerr = eps * releps;
+        *abserr = eps * abseps;
+        i__1 = neqn;
+        for (l = 1; l <= i__1; ++l) {
+            /* L120: */
+            y[l] = yy[l];
+        }
+        *t = *x;
+        *told = *t;
+        *isnold = 1;
+        return;
     }
-    *iflag = isn * 3;
-    *relerr = eps * releps;
-    *abserr = eps * abseps;
-    i__1 = neqn;
-    for (l = 1; l <= i__1; ++l) {
-        /* L120: */
-        y[l] = yy[l];
-    }
-    *t = *x;
-    *told = *t;
-    *isnold = 1;
-    return 0;
-
-/*   augment counter on number of steps and test for stiffness */
-
-L130:
+    /*   augment counter on number of steps and test for stiffness */
     ++nostep;
     ++kle4;
     if (*kold > 4) {
@@ -1081,8 +1057,8 @@ L130:
   Integrates a system of `neqn` first order ordinary differential equations of
   the form:
 
-      dy[i]/dt = f(t, y[0], y[1], ..., y[neqn - 1])
-      y[i] given at `t`
+  dy[i]/dt = f(t, y[0], y[1], ..., y[neqn - 1])
+  y[i] given at `t`
 
   The subroutine integrates from `t` to `tout`.  On return the parameters in
   the call list are set for continuing the integration.  The user has only to
@@ -1145,128 +1121,127 @@ L130:
 
   # First call to `ode`
 
-  The user must provide storage in his calling program for the arrays
+  The user must provide storage in their calling program for the arrays
   in the call list,
 
-      y[neqn], work[100 + 21 * neqn], iwork[5],
+  y[neqn], work[100 + 21 * neqn], iwork[5],
 
   Supply supply the subroutine `f(f_ctx, t, y, yp)` to evaluate
 
-      dy[i]/dt = yp[i] = f(t, y[0], y[1], ..., y[neqn - 1])
+  dy[i]/dt = yp[i] = f(t, y[0], y[1], ..., y[neqn - 1])
 
   and initialize the parameters:
 
-      `neqn` -- number of equations to be integrated
-      `y[]` -- vector of initial conditions
-      `t` -- starting point of integration
-      `tout` -- point at which solution is desired
-      `relerr, abserr` -- relative and absolute local error tolerances
-      `iflag` -- +1,-1.  indicator to initialize the code.  normal input
-           is +1.  the user should set iflag=-1 only if it is
-           impossible to continue the integration beyond `tout`.
+  `neqn` -- number of equations to be integrated
+  `y[]` -- vector of initial conditions
+  `t` -- starting point of integration
+  `tout` -- point at which solution is desired
+  `relerr, abserr` -- relative and absolute local error tolerances
+  `iflag` -- +1,-1.  indicator to initialize the code.  normal input
+  is +1.  the user should set iflag=-1 only if it is
+  impossible to continue the integration beyond `tout`.
 
   All parameters except `f`, `neqn` and `tout`  may be altered by the
   code on output so must be variables in the calling program.
 
   # Output from `ode`
 
-      `neqn` -- unchanged
-      `y[]` -- solution at `t`
-      `t` -- last point reached in integration.  normal return has
-           `t == tout`.
-      `tout` -- unchanged
-      `relerr`, `abserr` -- normal return has tolerances unchanged.  `iflag=3`
-           signals tolerances increased
-      iflag = 2 -- normal return.  integration reached  tout
-            = 3 -- integration did not reach  tout  because error
-                   tolerances too small.  relerr ,  abserr  increased
-                   appropriately for continuing
-            = 4 -- integration did not reach  tout  because more than
-                   500 steps needed
-            = 5 -- integration did not reach  tout  because equations
-                   appear to be stiff
-            = 6 -- invalid input parameters (fatal error)
-           the value of  iflag  is returned negative when the input
-           value is negative and the integration does not reach  tout ,
-           i.e., -3, -4, -5.
-      work[], iwork[] -- information generally of no interest to the
-           user but necessary for subsequent calls.
+  `neqn` -- unchanged
+  `y[]` -- solution at `t`
+  `t` -- last point reached in integration.  normal return has
+  `t == tout`.
+  `tout` -- unchanged
+  `relerr`, `abserr` -- normal return has tolerances unchanged.  `iflag=3`
+  signals tolerances increased
+  iflag = 2 -- normal return.  integration reached  tout
+  = 3 -- integration did not reach  tout  because error
+  tolerances too small.  relerr ,  abserr  increased
+  appropriately for continuing
+  = 4 -- integration did not reach  tout  because more than
+  500 steps needed
+  = 5 -- integration did not reach  tout  because equations
+  appear to be stiff
+  = 6 -- invalid input parameters (fatal error)
+  the value of  iflag  is returned negative when the input
+  value is negative and the integration does not reach  tout ,
+  i.e., -3, -4, -5.
+  work[], iwork[] -- information generally of no interest to the
+  user but necessary for subsequent calls.
 
   # Subsequent calls to `ode`
 
   Subroutine `ode` returns with all information needed to continue the
   integration.  If the integration reached `tout`, the user need only define a
   new `tout` and call again.  If the integration did not reach `tout` and the
-  user wants to continue, he just calls again.  The output value of `iflag` is
+  user wants to continue, simply call again.  The output value of `iflag` is
   the appropriate input value for subsequent calls.  The only situation in
   which it should be altered is to stop the integration internally at the new
   `tout`, i.e., change output `iflag=2` to input `iflag=-2`.  Error tolerances
   may be changed by the user before continuing.  All other parameters must
   remain unchanged.
 */
-int ode(const func_type f,
-        void *const f_ctx,
-        const int neqn,
-        double *y,
-        double *const t,
-        const double tout,
-        double *const relerr,
-        double *const abserr,
-        int *const iflag,
-        double *work,
-        int *iwork,
-        const int maxnum)
+void ode(const fn_type f,
+         void *const f_ctx,
+         const int neqn,
+         double *const y,
+         double *const t,
+         const double tout,
+         double *const relerr,
+         double *const abserr,
+         int *const iflag,
+         double *const work,
+         int *const iwork,
+         const int maxnum)
 {
-    static const int ialpha = 1;
-    static const int ih = 89;
-    static const int ihold = 90;
-    static const int istart = 91;
-    static const int itold = 92;
-    static const int idelsn = 93;
-    static const int ibeta = 13;
-    static const int isig = 25;
-    static const int iv = 38;
-    static const int iw = 50;
-    static const int ig = 62;
-    static const int iphase = 75;
-    static const int ipsi = 76;
-    static const int ix = 88;
+    static const int ialpha = 0;
+    static const int ih = 88;
+    static const int ihold = 89;
+    static const int istart = 90;
+    static const int itold = 91;
+    static const int idelsn = 92;
+    static const int ibeta = 12;
+    static const int isig = 24;
+    static const int iv = 37;
+    static const int iw = 49;
+    static const int ig = 61;
+    static const int iphase = 74;
+    static const int ipsi = 75;
+    static const int ix = 87;
+    static const int iyy = 99;
 
-    static int ip, iyp, iwt, iyy, iphi;
+    const int iwt = iyy + neqn;
+    const int ip = iwt + neqn;
+    const int iyp = ip + neqn;
+    const int iypout = iyp + neqn;
+    const int iphi = iypout + neqn;
+
+    // TODO: de-static-ify these variables
     static bool nornd, start, phase1;
-    static int iypout;
 
-    /* Parameter adjustments */
-    --y;
-    --work;
-    --iwork;
-
-    /* Function Body */
-    iyy = 100;
-    iwt = iyy + neqn;
-    ip = iwt + neqn;
-    iyp = ip + neqn;
-    iypout = iyp + neqn;
-    iphi = iypout + neqn;
-    if (abs(*iflag) == 1) {
-        goto L1;
+    if (abs(*iflag) != 1) {
+        start = work[istart] > 0.;
+        phase1 = work[iphase] > 0.;
+        nornd = iwork[1] != -1;
     }
-    start = work[istart] > 0.;
-    phase1 = work[iphase] > 0.;
-    nornd = iwork[2] != -1;
-L1:
-    de(f, f_ctx, neqn, &y[1], t, tout, relerr, abserr, iflag, &work[iyy], &work[iwt], &work[ip], &work[iyp], &work[iypout], &work[iphi], &work[ialpha], &work[ibeta], &work[isig], &work[iv], &work[iw], &work[ig], &phase1, &work[ipsi], &work[ix], &work[ih], &work[ihold], &start, &work[itold], &work[idelsn], &iwork[1], &nornd, &iwork[3], &iwork[4], &iwork[5], maxnum);
-    work[istart] = -1.;
+    de(f, f_ctx, neqn, y, t, tout, relerr, abserr, iflag,
+       &work[iyy], &work[iwt], &work[ip], &work[iyp], &work[iypout],
+       &work[iphi], &work[ialpha], &work[ibeta], &work[isig], &work[iv],
+       &work[iw], &work[ig], &phase1, &work[ipsi], &work[ix], &work[ih],
+       &work[ihold], &start, &work[itold], &work[idelsn], &iwork[0],
+       &nornd, &iwork[2], &iwork[3], &iwork[4], maxnum);
     if (start) {
-        work[istart] = 1.;
+        work[istart] = 1.0;
+    } else {
+        work[istart] = -1.0;
     }
-    work[iphase] = -1.;
     if (phase1) {
-        work[iphase] = 1.;
+        work[iphase] = 1.0;
+    } else {
+        work[iphase] = -1.0;
     }
-    iwork[2] = -1;
     if (nornd) {
-        iwork[2] = 1;
+        iwork[1] = 1;
+    } else {
+        iwork[1] = -1;
     }
-    return 0;
 }
