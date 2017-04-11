@@ -68,11 +68,12 @@ typedef void (*FoldMapFn)(void *f_ctx,
     running.
 */
 struct ProtoVector {
-    /** Creates a new uninitialized vector. */
-    Vector (*create)(struct ProtoVector *self);
+    /** Creates a new uninitialized vector with a fixed length determined by
+        the `ProtoVector`. */
+    Vector (*create)(void *self);
 
     /** Destroys a vector. */
-    void (*destroy)(struct ProtoVector *self, Vector vector);
+    void (*destroy)(void *self, Vector vector);
 
     /** Applies an element-wise operation (map) to a set of vectors and then
         accumulates a combined result (fold) of a monoidal operation.
@@ -103,14 +104,16 @@ struct ProtoVector {
         The number of `vectors`.
 
     */
-    void *(*fold_map)(struct ProtoVector *self,
-                      Accum accum,
-                      AccumType accum_type,
-                      FoldMapFn f,
-                      void *f_ctx,
-                      Vector *vectors,
-                      size_t num_vectors);
+    void (*fold_map)(void *self,
+                     Accum accum,
+                     AccumType accum_type,
+                     FoldMapFn f,
+                     void *f_ctx,
+                     Vector *vectors,
+                     size_t num_vectors);
 };
+
+double vector_sum(void *self, const struct ProtoVector *self_vtable, Vector v);
 
 #ifdef __cplusplus
 }
