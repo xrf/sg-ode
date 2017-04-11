@@ -20,4 +20,4 @@ valgrind --error-exitcode=1 -q ./a.out >/dev/null
 mpicc -fsanitize=memory $CFLAGS $objs -lm && ./a.out >/dev/null
 mpicc -fsanitize=address $CFLAGS $objs -lm && ./a.out >/dev/null
 
-mpicc $CFLAGS proto_vector.c proto_vector_test.c && mpiexec -np 4 ./a.out
+mpicc $CFLAGS proto_vector.c simple_proto_vector.c mpi_proto_vector.c proto_vector_test.c && mpiexec -np 4 ./a.out

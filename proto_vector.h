@@ -36,6 +36,7 @@ typedef int AccumType;
     @param[in,out] f_ctx      The same `f_ctx` pointer provided to `fold_map`.
     @param[in,out] accum      The accumulated value so far.
     @param[in]     val        A value that needs to be merged into `accum`.
+    @param[in]     offset     Offset of this slice relative to the beginning.
     @param[in,out] data       Partial slices of the vectors.
     @param[in]     num_elems  Number of elements in each slice.
 
@@ -56,18 +57,18 @@ typedef int AccumType;
 typedef void (*FoldMapFn)(void *f_ctx,
                           Accum accum,
                           Accum val,
-                          double **data,
+                          size_t offset,
+                          double *restrict *data,
                           size_t num_elems);
 
 /** A proto-vector allows element-wise operations and reductions on a vector,
     as well as creation and destruction.
 
-    All functions within a `ProtoVector` require exclusive access to the
-    `self` object.  Therefore, one must not call any of `ProtoVector`'s
-    functions with the same `self` object while any another function is
-    running.
+    All functions within this struct require exclusive access to the `self`
+    object.  Therefore, one must not call any of `ProtoVector`'s functions
+    with the same `self` object while any another function is running.
 */
-struct ProtoVector {
+struct ProtoVectorVtable {
     /** Creates a new uninitialized vector with a fixed length determined by
         the `ProtoVector`. */
     Vector (*create)(void *self);
@@ -90,15 +91,20 @@ struct ProtoVector {
         `accum_type` is zero, the pointer is ignored.
 
         @param[in] accum_type
-        If positive, the accumulator shall an array of `unsigned char` of
+        If positive, the accumulator shall be an array of `unsigned char` with
         length `accum_type`.  If negative, the accumulator shall be an array
-        of `double` of length `-accum_type`.  If zero, `accum` is ignored.
+        of `double` with length `-accum_type`.  If zero, `accum` is ignored.
 
         @param[in] f
         The operation that is being performed.  See `#FoldMapFn`.
 
+        @param[in] offset
+        The starting index.
+
         @param[in,out] vectors
-        The vectors that are to be read and possibly modified.
+        The vectors that are to be read and possibly modified.  If a vector is
+        being modified, it must appear only once inside the array of
+        `vectors`.
 
         @param[in] num_vectors
         The number of `vectors`.
@@ -109,11 +115,15 @@ struct ProtoVector {
                      AccumType accum_type,
                      FoldMapFn f,
                      void *f_ctx,
+                     size_t offset,
                      Vector *vectors,
                      size_t num_vectors);
 };
 
-double vector_sum(void *self, const struct ProtoVector *self_vtable, Vector v);
+/** Sum the values of a vector. */
+double vector_sum(void *self,
+                  const struct ProtoVectorVtable *self_vtable,
+                  Vector vector);
 
 #ifdef __cplusplus
 }
