@@ -22,9 +22,12 @@
 #include <stdio.h>
 #include "ode.h"
 
-void f(void *ctx, double t, const double *y, double *yp)
+void f(void *ctx, double t, const SgVector *restrict y_vec,
+       SgVector *restrict yp_vec)
 {
     static const double ksq = 0.51;
+    const double *const y = (const double *)y_vec;
+    double *const yp = (double *)yp_vec;
     (void)ctx;
     (void)t;
     yp[0] = y[1] * y[2];
@@ -34,14 +37,21 @@ void f(void *ctx, double t, const double *y, double *yp)
 
 int main(void)
 {
-    static const int maxnum = 500;
+    static const unsigned maxnum = 500;
     static const size_t neqn = 3;
-    double y[3], t, tout, work[63] = {0.0};
+    double t, tout;
     int i;
-    struct Ode iwork;
+    struct Ode solver;
     double relerr = 1.0e-9;
     double abserr = 1.0e-16;
     int iflag = 1;
+    struct SgBasicVectorDriver mdrv = sg_basic_vector_driver_new(3);
+    struct SgVectorDriver drv = sg_basic_vector_driver_get(&mdrv);
+    SgVector *y_vec = sg_vector_new(drv);
+    double *y = (double *)y_vec;
+
+    ode_init(&solver, drv);
+
     printf("neqn=%zu relerr=%g abserr=%g iflag=%i\n",
            neqn, relerr, abserr, iflag);
 
@@ -58,8 +68,8 @@ int main(void)
     for (i = 1; i <= 12; ++i) {
         tout = 5.0 * i;
     retry:
-        ode(f, NULL, neqn, y, &t, tout, &relerr, &abserr,
-            &iflag, work, &iwork, maxnum);
+        ode(&solver, f, NULL, drv, y_vec, &t, tout,
+            &relerr, &abserr, maxnum, &iflag);
         dump();
         switch (iflag) {
         case 1:
@@ -83,5 +93,7 @@ int main(void)
             return 1;
         }
     }
+    ode_del(&solver);
+    sg_vector_del(drv, y_vec);
     return 0;
 }

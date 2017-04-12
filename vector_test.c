@@ -24,10 +24,15 @@ int main(void)
         struct SgVectorDriver drv = sg_mpi_vector_driver_get(&mdrv);
 
         SgVector *v = sg_vector_new(drv);
+        double sum;
+
+        sg_vector_fill(drv, v, 1.0);
+        sum = sg_vector_sum(drv, v);
+        assert(sum == sg_vector_len(drv));
 
         sg_vector_operate(drv, NULL, 0, init_f, NULL, 0, &v, 1);
-
-        assert(sg_vector_sum(drv, v) == (N * np) * (N * np - 1) / 2.0);
+        sum = sg_vector_sum(drv, v);
+        assert(sum == (N * np) * (N * np - 1) / 2.0);
 
         sg_vector_del(drv, v);
     }

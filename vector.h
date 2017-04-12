@@ -161,11 +161,17 @@ void sg_vector_operate(struct SgVectorDriver drv,
                        SgVector **vectors,
                        size_t num_vectors);
 
+/** Set every element of a vector to the same value. */
+void sg_vector_fill(struct SgVectorDriver drv,
+                    const SgVector *vector, double value);
+
+extern SgVectorOperation sg_vector_fill_operation;
+
 /** Sums the values of a vector. */
 double sg_vector_sum(struct SgVectorDriver drv, const SgVector *vector);
 
 /** The underlying operation used by `sg_vector_sum`. */
-extern SgVectorOperation vector_sum_operation;
+extern SgVectorOperation sg_vector_sum_operation;
 
 struct SgBasicVectorDriver {
     struct SgVectorDriverBase base;

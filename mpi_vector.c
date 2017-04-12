@@ -1,6 +1,6 @@
 #include <limits.h>
 #include <stdio.h>
-#include <stdint.h> /* for uint64_t */
+#include <stdint.h>                     /* for uint64_t */
 #include <stdlib.h>
 #include <string.h>
 #include <mpi.h>

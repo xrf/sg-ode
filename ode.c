@@ -8,12 +8,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "vector.h"
 #include "ode.h"
 
-typedef void (*fn_type)(void *restrict f_ctx,
+typedef void (*fn_type)(void *f_ctx,
                         double t,
-                        const double *restrict y,
-                        double *restrict yp);
+                        const SgVector *restrict y,
+                        SgVector *restrict yp);
 
 static double min(double x, double y)
 {
@@ -165,10 +166,9 @@ static void copy_double_array(double *out, const double *in, size_t n) {
 int step(double *const restrict y,
          const fn_type f,
          void *const restrict f_ctx,
-         const size_t neqn,
          double *const restrict eps,
          double *const restrict wt,
-         double *const restrict phi,
+         double *const restrict *const phi,
          double *const restrict p,
          double *const restrict yp,
          struct Ode *const self)
@@ -178,6 +178,7 @@ int step(double *const restrict y,
         0.00936, 0.00789, 0.00679, 0.00592, 0.00524, 0.00468
     };
 
+    const size_t neqn = sg_vector_len(self->drv);
     const double p5eps = *eps * 0.5;
     bool *const start = &self->start;
     bool *const phase1 = &self->phase1;
@@ -233,9 +234,9 @@ int step(double *const restrict y,
         {
             double sum = 0.0;
             /* 𝛗[1] ← 𝟎 */
-            clear_double_array(phi + neqn, neqn);
+            clear_double_array(phi[1], neqn);
             /* 𝛗[0] ← 𝐲′ */
-            copy_double_array(phi, yp, neqn);
+            copy_double_array(phi[0], yp, neqn);
             /* sum = ‖𝐲′ / 𝛚‖² */
             for (l = 0; l < neqn; ++l) {
                 sum += pow(yp[l] / wt[l], 2.0);
@@ -256,7 +257,7 @@ int step(double *const restrict y,
         if (p5eps <= round * 100.0) {
             *nornd = false;
             /* 𝛗[14] ← 𝟎 */
-            clear_double_array(&phi[neqn * 14], neqn);
+            clear_double_array(phi[14], neqn);
         }
     }
     ifail = 0;
@@ -338,25 +339,25 @@ int step(double *const restrict y,
         for (i = *ns; i < *k; ++i) {
             /* 𝛗[i] ← β[i] 𝛗[i] */
             for (l = 0; l < neqn; ++l) {
-                phi[l + i * neqn] *= beta[i];
+                phi[i][l] *= beta[i];
             }
         }
         /* predict solution and differences */
         /* 𝛗[k + 1] ← 𝛗[k] */
-        copy_double_array(phi + (*k + 1) * neqn, phi + *k * neqn, neqn);
+        copy_double_array(phi[*k + 1], phi[*k], neqn);
         /* 𝛗[k] ← 𝟎 */
-        clear_double_array(phi + *k * neqn, neqn);
+        clear_double_array(phi[*k], neqn);
         /* 𝐩 ← 𝛗 𝐠 (matrix-vector) */
         clear_double_array(p, neqn);
         for (i = *k; i-- > 0;) {
             for (l = 0; l < neqn; ++l) {
-                p[l] += g[i] * phi[l + i * neqn];
+                p[l] += g[i] * phi[i][l];
             }
         }
         for (i = *k; i-- > 0;) {
             /* 𝛗[i] ← 𝛗[i] + 𝛗[i + 1] */
             for (l = 0; l < neqn; ++l) {
-                phi[l + i * neqn] += phi[l + (i + 1) * neqn];
+                phi[i][l] += phi[i + 1][l];
             }
         }
         if (!*nornd) {
@@ -364,9 +365,9 @@ int step(double *const restrict y,
                𝐩 ← 𝐲 + 𝛕
                𝛗[15] ← (𝐩 - 𝐲) - 𝛕 */
             for (l = 0; l < neqn; ++l) {
-                const double tau = *h * p[l] - phi[l + neqn * 14];
+                const double tau = *h * p[l] - phi[14][l];
                 p[l] = y[l] + tau;
-                phi[l + neqn * 15] = (p[l] - y[l]) - tau;
+                phi[15][l] = (p[l] - y[l]) - tau;
             }
         } else {
             /* 𝐩 ← 𝐲 + h 𝐩 */
@@ -389,12 +390,12 @@ int step(double *const restrict y,
                erk = ‖(𝐲′ - 𝛗[0]) / 𝛚‖² */
             for (l = 0; l < neqn; ++l) {
                 const double iwt = 1.0 / wt[l];
-                const double ypmphi = yp[l] - phi[l];
+                const double ypmphi = yp[l] - phi[0][l];
                 if (*k > 2) {
-                    erkm2 += pow((phi[l + (*k - 2) * neqn] + ypmphi) * iwt, 2.0);
+                    erkm2 += pow((phi[*k - 2][l] + ypmphi) * iwt, 2.0);
                 }
                 if (*k >= 2) {
-                    erkm1 += pow((phi[l + (*k - 1) * neqn] + ypmphi) * iwt, 2.0);
+                    erkm1 += pow((phi[*k - 1][l] + ypmphi) * iwt, 2.0);
                 }
                 erk += pow(ypmphi * iwt, 2.0);
             }
@@ -440,9 +441,7 @@ int step(double *const restrict y,
         for (i = 0; i < *k; ++i) {
             /* 𝛗[i] ← β[i]⁻¹ (𝛗[i] - 𝛗[i + 1]) */
             for (l = 0; l < neqn; ++l) {
-                phi[l + i * neqn] =
-                    (1.0 / beta[i]) *
-                    (phi[l + i * neqn] - phi[l + (i + 1) * neqn]);
+                phi[i][l] = (1.0 / beta[i]) * (phi[i][l] - phi[i + 1][l]);
             }
         }
         for (i = 1; i < *k; ++i) {
@@ -485,14 +484,14 @@ int step(double *const restrict y,
                𝐲 ← 𝐩 + 𝛒
                𝛗[14] ← (𝐲 - 𝐩) - 𝛒 */
             for (l = 0; l < neqn; ++l) {
-                const double rho = hgk * (yp[l] - phi[l]) - phi[l + neqn * 15];
+                const double rho = hgk * (yp[l] - phi[0][l]) - phi[15][l];
                 y[l] = p[l] + rho;
-                phi[l + neqn * 14] = (y[l] - p[l]) - rho;
+                phi[14][l] = (y[l] - p[l]) - rho;
             }
         } else {
             /* 𝐲 ← 𝐩 + h g[k] (𝐲′ - 𝛗[0]) */
             for (l = 0; l < neqn; ++l) {
-                y[l] = p[l] + hgk * (yp[l] - phi[l]);
+                y[l] = p[l] + hgk * (yp[l] - phi[0][l]);
             }
         }
     }
@@ -502,15 +501,13 @@ int step(double *const restrict y,
     /* 𝛗[k] ← 𝐲′ - 𝛗[0]
        𝛗[k + 1] ← 𝛗[k] - 𝛗[k + 1] */
     for (l = 0; l < neqn; ++l) {
-        phi[l + *k * neqn] = yp[l] - phi[l];
-        phi[l + (*k + 1) * neqn] =
-            phi[l + *k * neqn] -
-            phi[l + (*k + 1) * neqn];
+        phi[*k][l] = yp[l] - phi[0][l];
+        phi[*k + 1][l] = phi[*k][l] - phi[*k + 1][l];
     }
     /* ∀ i ∈ [0, k).  𝛗[i] ← 𝛗[i] + 𝛗[k] */
     for (i = 0; i < *k; ++i) {
         for (l = 0; l < neqn; ++l) {
-            phi[l + i * neqn] += phi[l + *k * neqn];
+            phi[i][l] += phi[*k][l];
         }
     }
 
@@ -532,7 +529,7 @@ int step(double *const restrict y,
     } else if (*k < *ns) {
         /* erkp1 = ‖𝛗[k + 1] / 𝛚‖² */
         for (l = 0; l < neqn; ++l) {
-            erkp1 += pow(phi[l + (*k + 1) * neqn] / wt[l], 2.0);
+            erkp1 += pow(phi[*k + 1][l] / wt[l], 2.0);
         }
         erkp1 = absh * gstr[*k] * sqrt(erkp1);
 
@@ -590,16 +587,17 @@ int step(double *const restrict y,
   The remaining parameters are returned unaltered from their input values.
   Integration with `step` may be continued.
 */
-void intrp(const double x,
+void intrp(const struct SgVectorDriver drv,
+           const double x,
            const double *const restrict y,
            const double xout,
            double *const restrict yout,
            double *const restrict ypout,
-           const size_t neqn,
            const unsigned kold,
-           const double *const restrict phi,
+           double *const restrict *const phi,
            const double *const restrict psi)
 {
+    const size_t neqn = sg_vector_len(drv);
     const double hi = xout - x;
     const unsigned ki = (unsigned)(kold + 1);
 
@@ -643,8 +641,8 @@ void intrp(const double x,
         const double gi = g[i];
         const double rhoi = rho[i];
         for (l = 0; l < neqn; ++l) {
-            yout[l] += gi * phi[l + i * neqn];
-            ypout[l] += rhoi * phi[l + i * neqn];
+            yout[l] += gi * phi[i][l];
+            ypout[l] += rhoi * phi[i][l];
         }
     }
     /* 𝐲° ← 𝐲 + hi 𝐲° */
@@ -661,24 +659,18 @@ void intrp(const double x,
   The constant `maxnum` is the maximum number of steps allowed in one call to
   `de`.
 */
-void de(const fn_type f,
+void de(struct Ode *const self,
+        const fn_type f,
         void *const restrict f_ctx,
-        const size_t neqn,
         double *const restrict y,
         double *const restrict t,
         const double tout,
         double *const restrict relerr,
         double *const restrict abserr,
-        int *const restrict iflag,
-        double *const restrict yy,
-        double *const restrict wt,
-        double *const restrict p,
-        double *const restrict yp,
-        double *const restrict ypout,
-        double *const restrict phi,
-        struct Ode *const self,
-        const int maxnum)
+        const unsigned maxnum,
+        int *const restrict iflag)
 {
+    const size_t neqn = sg_vector_len(self->drv);
     const bool isn = *iflag >= 0;
     const double del = tout - *t;
     const double absdel = fabs(del);
@@ -686,7 +678,8 @@ void de(const fn_type f,
 
     bool stiff;
     double abseps, eps, releps;
-    int kle4, nostep;
+    int kle4;
+    unsigned nostep;
     size_t l;
 
     /* test for improper parameters */
@@ -713,7 +706,7 @@ void de(const fn_type f,
         self->start = true;
         self->x = *t;
         /* 𝐘 ← 𝐲 */
-        copy_double_array(yy, y, neqn);
+        copy_double_array(self->yy, y, neqn);
         self->delsgn = copysign(1.0, del);
         self->h = copysign(max(fabs(tout - self->x),
                                4.0 * DBL_EPSILON * fabs(self->x)),
@@ -725,8 +718,8 @@ void de(const fn_type f,
 
         if (fabs(self->x - *t) >= absdel) {
             /* (𝐲, 𝐲°′) ← intrp(x, 𝐘, tout, kold, 𝛗, 𝛙) */
-            intrp(self->x, yy, tout, y, ypout, neqn,
-                  self->kold, phi, self->psi);
+            intrp(self->drv, self->x, self->yy, tout, y, self->ypout,
+                  self->kold, self->phi, self->psi);
             *iflag = 2;
             *t = tout;
             self->told = *t;
@@ -738,10 +731,10 @@ void de(const fn_type f,
            return */
         if (!isn || fabs(tout - self->x) < 4.0 * DBL_EPSILON * fabs(self->x)) {
             self->h = tout - self->x;
-            (*f)(f_ctx, self->x, yy, yp);
+            (*f)(f_ctx, self->x, self->yy, self->yp);
             /* 𝐲 ← 𝐘 + h 𝐲′ */
             for (l = 0; l < neqn; ++l) {
-                y[l] = yy[l] + self->h * yp[l];
+                y[l] = self->yy[l] + self->h * self->yp[l];
             }
             *iflag = 2;
             *t = tout;
@@ -757,7 +750,7 @@ void de(const fn_type f,
                 *iflag = isn ? 5 : -5;
             }
             /* 𝐲 ← 𝐘 */
-            copy_double_array(y, yy, neqn);
+            copy_double_array(y, self->yy, neqn);
             *t = self->x;
             self->told = *t;
             self->isnold = true;
@@ -768,16 +761,17 @@ void de(const fn_type f,
         self->h = copysign(min(fabs(self->h), fabs(tend - self->x)), self->h);
         /* 𝛚 ← releps |𝐘| + abseps */
         for (l = 0; l < neqn; ++l) {
-            wt[l] = releps * fabs(yy[l]) + abseps;
+            self->wt[l] = releps * fabs(self->yy[l]) + abseps;
         }
 
         /* test for tolerances too small */
-        if (step(yy, f, f_ctx, neqn, &eps, wt, phi, p, yp, self)) {
+        if (step(self->yy, f, f_ctx, &eps, self->wt,
+                 self->phi, self->p, self->yp, self)) {
             *iflag = isn ? 3 : -3;
             *relerr = eps * releps;
             *abserr = eps * abseps;
             /* 𝐲 ← 𝐘 */
-            copy_double_array(y, yy, neqn);
+            copy_double_array(y, self->yy, neqn);
             *t = self->x;
             self->told = *t;
             self->isnold = true;
@@ -919,25 +913,52 @@ void de(const fn_type f,
   tolerances may be changed by the user before continuing.  All other
   parameters must remain unchanged.
 */
-void ode(const fn_type f,
+void ode(struct Ode *const self,
+         const fn_type f,
          void *const restrict f_ctx,
-         const size_t neqn,
-         double *const restrict y,
+         const struct SgVectorDriver drv,
+         SgVector *const restrict y,
          double *const restrict t,
          const double tout,
          double *const restrict relerr,
          double *const restrict abserr,
-         int *const restrict iflag,
-         double *const restrict work,
-         struct Ode *const self,
-         const int maxnum)
+         const unsigned maxnum,
+         int *const restrict iflag)
 {
-    const size_t iwt = neqn;
-    const size_t ip = iwt + neqn;
-    const size_t iyp = ip + neqn;
-    const size_t iypout = iyp + neqn;
-    const size_t iphi = iypout + neqn;
-    de(f, f_ctx, neqn, y, t, tout, relerr, abserr, iflag,
-       &work[0], &work[iwt], &work[ip], &work[iyp], &work[iypout],
-       &work[iphi], self, maxnum);
+    (void)drv; // TODO: remove this?
+    de(self, f, f_ctx, y, t, tout, relerr, abserr, maxnum, iflag);
+}
+
+void ode_init(struct Ode *self, struct SgVectorDriver drv)
+{
+    size_t i;
+    self->drv = drv;
+    // TODO: which ones actually NEED to be init'ed
+    self->yy = sg_vector_new(self->drv);
+    sg_vector_fill(self->drv, self->yy, 0.0);
+    self->wt = sg_vector_new(self->drv);
+    sg_vector_fill(self->drv, self->wt, 0.0);
+    self->p = sg_vector_new(self->drv);
+    sg_vector_fill(self->drv, self->p, 0.0);
+    self->yp = sg_vector_new(self->drv);
+    sg_vector_fill(self->drv, self->yp, 0.0);
+    self->ypout = sg_vector_new(self->drv);
+    sg_vector_fill(self->drv, self->ypout, 0.0);
+    for (i = 0; i < sizeof(self->phi) / sizeof(*self->phi); ++i) {
+        self->phi[i] = sg_vector_new(self->drv);
+        sg_vector_fill(self->drv, self->phi[i], 0.0);
+    }
+}
+
+void ode_del(struct Ode *self)
+{
+    size_t i;
+    for (i = 0; i < sizeof(self->phi) / sizeof(*self->phi); ++i) {
+        sg_vector_del(self->drv, self->phi[i]);
+    }
+    sg_vector_del(self->drv, self->ypout);
+    sg_vector_del(self->drv, self->yp);
+    sg_vector_del(self->drv, self->p);
+    sg_vector_del(self->drv, self->wt);
+    sg_vector_del(self->drv, self->yy);
 }

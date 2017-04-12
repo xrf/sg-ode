@@ -40,20 +40,55 @@ void sg_vector_operate(struct SgVectorDriver drv,
                            offset, vectors, num_vectors);
 }
 
+void sg_vector_fill(struct SgVectorDriver drv,
+                    const SgVector *vector, double value)
+{
+    SgVector *v = (SgVector *)vector;
+    sg_vector_operate(drv, NULL, 0,
+                      &sg_vector_fill_operation, &value, 0, &v, 1);
+}
+
+void sg_vector_fill_operation(void *f_ctx,
+                              SgVectorAccum *accum,
+                              const SgVectorAccum *val,
+                              size_t offset,
+                              double **data,
+                              size_t num_elems)
+{
+    double c = *(const double *)f_ctx;
+    (void)accum;
+    (void)val;
+    (void)offset;
+    if (num_elems) {
+        size_t i;
+        double *v = data[0];
+        if (c == 0.0) {
+            for (i = 0; i < num_elems; ++i) {
+                v[i] = 0.0;
+            }
+        } else {
+            for (i = 0; i < num_elems; ++i) {
+                v[i] = c;
+            }
+        }
+    }
+}
+
 double sg_vector_sum(struct SgVectorDriver drv, const SgVector *vector)
 {
-    double accum;
+    double accum = 0.0;
     SgVector *v = (SgVector *)vector;
-    sg_vector_operate(drv, &accum, -1, &vector_sum_operation, NULL, 0, &v, 1);
+    sg_vector_operate(drv, &accum, -1,
+                      &sg_vector_sum_operation, NULL, 0, &v, 1);
     return accum;
 }
 
-void vector_sum_operation(void *f_ctx,
-                          SgVectorAccum *accum,
-                          const SgVectorAccum *val,
-                          size_t offset,
-                          double **data,
-                          size_t num_elems)
+void sg_vector_sum_operation(void *f_ctx,
+                             SgVectorAccum *accum,
+                             const SgVectorAccum *val,
+                             size_t offset,
+                             double **data,
+                             size_t num_elems)
 {
     double s = *(const double *)accum + *(const double *)val;
     (void)f_ctx;
@@ -126,7 +161,9 @@ static void basic_vector_operate(struct SgVectorDriverBase *self,
     }
 
     zero = check_oom(malloc(accum_size));
-    memcpy(zero, accum, accum_size);
+    if (accum) {
+        memcpy(zero, accum, accum_size);
+    }
 
     data = (double **)check_oom(malloc(num_vectors * sizeof(*data)));
     for (i = 0; i < num_vectors; ++i) {
