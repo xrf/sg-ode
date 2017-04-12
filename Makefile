@@ -2,6 +2,9 @@ all: check
 
 check: .check.ok~
 
-.check.ok~: ode.c ode.h ode_demo.c proto_vector.h proto_vector.c mpi_proto_vector.h mpi_proto_vector.c simple_proto_vector.h simple_proto_vector.c proto_vector_test.c ode_demo.txt test.sh
+.check.ok~: ode.c ode.h ode_demo.c vector.h vector.c vector_macros.h mpi_vector.h mpi_vector.c vector_test.c ode_demo.txt test.sh
 	@timeout 15 ./test.sh
 	@touch $@
+
+vector_macros.h: vector_macros.py
+	./vector_macros.py

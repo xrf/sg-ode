@@ -8,7 +8,7 @@ def write_macro(f, n):
     f.write("""
 /** Helper macro for defining map functions (no folding is done). */
 """[1:])
-    f.write(f"#define DEF_MAP_FN_{n}(prefix, name, ")
+    f.write(f"#define SG_DEFINE_VECTOR_MAP_{n}(prefix, name, ")
     for i in range(n):
         f.write(f"var{i}, ")
     f.write("block) \\\n")
@@ -30,10 +30,10 @@ def write_macro(f, n):
         } \\
     } \\
     prefix void name(void *f_ctx, \\
-                     Accum accum, \\
-                     Accum val, \\
+                     SgVectorAccum *accum, \\
+                     const SgVectorAccum *val, \\
                      size_t offset, \\
-                     double *restrict *data, \\
+                     double **data, \\
                      size_t num_elems) \\
     { \\
         (void)f_ctx; \\
@@ -54,7 +54,7 @@ with open(os.path.splitext(__file__)[0] + ".h", "w") as f:
 #ifndef G_WTDRPPR5HCLZDRBPLUWMIW34N5794
 #define G_WTDRPPR5HCLZDRBPLUWMIW34N5794
 /** @file
-    Helper macros */
+    Helper macros for defining vector operations. */
 #ifdef __cplusplus
 extern "C" {
 #endif

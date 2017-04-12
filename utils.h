@@ -1,3 +1,4 @@
+/* Internal header */
 #ifndef G_NOEOVY8VG0HN4O8XPPLL4K2X6P1E4
 #define G_NOEOVY8VG0HN4O8XPPLL4K2X6P1E4
 #include <stdio.h>
