@@ -359,15 +359,12 @@ int step(double *const restrict y,
         /* 𝐩 ← 𝛗 𝐠 (matrix-vector) */
         sg_vector_fill(drv, 0.0, p);
         for (i = *k; i-- > 0;) {
-            for (l = 0; l < neqn; ++l) {
-                p[l] += g[i] * phi[i][l];
-            }
+            /* 𝐩 ← 𝐩 + g[i] 𝛗[i] */
+            sg_vector_linear_assign(drv, 1.0, g[i], phi[i], p);
         }
         for (i = *k; i-- > 0;) {
             /* 𝛗[i] ← 𝛗[i] + 𝛗[i + 1] */
-            for (l = 0; l < neqn; ++l) {
-                phi[i][l] += phi[i + 1][l];
-            }
+            sg_vector_linear_assign(drv, 1.0, 1.0, phi[i + 1], phi[i]);
         }
         if (!*nornd) {
             /* 𝛕 = h 𝐩 - 𝛗[14]
@@ -380,9 +377,7 @@ int step(double *const restrict y,
             }
         } else {
             /* 𝐩 ← 𝐲 + h 𝐩 */
-            for (l = 0; l < neqn; ++l) {
-                p[l] = y[l] + *h * p[l];
-            }
+            sg_vector_linear_assign(drv, *h, 1.0, y, p);
         }
         {
             const double xold = *x;
@@ -515,9 +510,7 @@ int step(double *const restrict y,
     }
     /* ∀ i ∈ [0, k).  𝛗[i] ← 𝛗[i] + 𝛗[k] */
     for (i = 0; i < *k; ++i) {
-        for (l = 0; l < neqn; ++l) {
-            phi[i][l] += phi[*k][l];
-        }
+        sg_vector_linear_assign(drv, 1.0, 1.0, phi[*k], phi[i]);
     }
 
     /* estimate error at order k+1 unless: in first phase when always raise
@@ -537,10 +530,7 @@ int step(double *const restrict y,
         erk = erkm1;
     } else if (*k < *ns) {
         /* erkp1 = ‖𝛗[k + 1] / 𝛚‖² */
-        for (l = 0; l < neqn; ++l) {
-            erkp1 += pow(phi[*k + 1][l] / wt[l], 2.0);
-        }
-        erkp1 = absh * gstr[*k] * sqrt(erkp1);
+        erkp1 = absh * gstr[*k] * sqrt(vector_div_normsq(drv, phi[*k + 1], wt));
 
         /* using estimated error at order k+1, determine appropriate order
            for next step */
@@ -655,9 +645,7 @@ void intrp(const struct SgVectorDriver drv,
         }
     }
     /* 𝐲° ← 𝐲 + hi 𝐲° */
-    for (l = 0; l < neqn; ++l) {
-        yout[l] = y[l] + hi * yout[l];
-    }
+    sg_vector_linear_assign(drv, hi, 1.0, y, yout);
 }
 
 /*
@@ -743,9 +731,7 @@ void de(struct Ode *const self,
             self->h = tout - self->x;
             (*f)(f_ctx, self->x, self->yy, self->yp);
             /* 𝐲 ← 𝐘 + h 𝐲′ */
-            for (l = 0; l < neqn; ++l) {
-                y[l] = self->yy[l] + self->h * self->yp[l];
-            }
+            sg_vector_linear(drv, 1.0, self->yy, self->h, self->yp, y);
             *iflag = 2;
             *t = tout;
             self->told = *t;
