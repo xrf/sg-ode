@@ -167,6 +167,12 @@ void sg_vector_fill(struct SgVectorDriver drv,
 
 extern SgVectorOperation sg_vector_fill_operation;
 
+/** Copy the contents of a vector. */
+void sg_vector_copy(struct SgVectorDriver drv,
+                    const SgVector *src, SgVector *dest);
+
+extern SgVectorOperation sg_vector_copy_operation;
+
 /** Sums the values of a vector. */
 double sg_vector_sum(struct SgVectorDriver drv, const SgVector *vector);
 

@@ -1,0 +1,46 @@
+{macros}
+LIBS=-lm
+harness=$(HARNESS) timeout 15
+
+all: check
+
+clean:
+	rm -fr bin/* *.o *.o_mpi *.ok
+
+check: bin/ode_test.ok bin/vector_test.ok
+
+lint: check
+	./lint.sh
+
+.PHONY: all clean check lint Makefile
+
+{bins}
+
+bin/ode_test.ok: bin/ode_test
+	@mkdir -p $(@D)
+	$(harness) bin/ode_test >ode_demo.out
+	@git --no-pager diff --exit-code --no-index ode_demo.out ode_demo.txt
+	@touch $@
+
+bin/vector_test.ok: bin/vector_test
+	@mkdir -p $(@D)
+	$(harness) mpiexec -np 4 bin/vector_test
+	@touch $@
+
+vector_macros.h: vector_macros.py
+	./vector_macros.py
+
+.SUFFIXES: .c .o .o_mpi
+
+.c.o:
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
+
+.c.o_mpi:
+	$(MPICC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
+
+Makefile:
+	@[ -x ./config.status ] && ./config.status
+
+.PHONY: all check clean Makefile
+
+{deps}

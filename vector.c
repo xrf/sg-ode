@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "utils.h"
+#include "vector_macros.h"
 #include "vector.h"
 
 SgVector *sg_vector_try_new(struct SgVectorDriver drv)
@@ -39,6 +40,18 @@ void sg_vector_operate(struct SgVectorDriver drv,
     (*drv.vtable->operate)(drv.data, accum, accum_type, f, f_ctx,
                            offset, vectors, num_vectors);
 }
+
+void sg_vector_copy(struct SgVectorDriver drv,
+                    const SgVector *src, SgVector *dest)
+{
+    SgVector *v[] = {(SgVector *)src, dest};
+    sg_vector_operate(drv, NULL, 0, &sg_vector_copy_operation, NULL,
+                      0, v, sizeof(v) / sizeof(*v));
+}
+
+SG_DEFINE_VECTOR_MAP_2(, sg_vector_copy_operation, src, dest, {
+        *dest = *src;
+    })
 
 void sg_vector_fill(struct SgVectorDriver drv,
                     const SgVector *vector, double value)

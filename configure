@@ -1,0 +1,65 @@
+#!/usr/bin/env python
+import itertools, os, shutil, subprocess, tempfile
+
+bins = [
+    {
+        "name": "bin/ode_test",
+        "deps": ["ode.o", "ode_demo.o", "vector.o"],
+    },
+    {
+        "name": "bin/vector_test",
+        "deps": ["mpi_vector.o_mpi", "vector.o", "vector_test.o_mpi"],
+        "cc": "MPICC",
+    },
+]
+
+def bin_rule(b):
+    return """
+{name}: {deps}
+	mkdir -p $(@D)
+	$({cc}) $(CFLAGS) -o $@ {deps} $(LIBS)
+"""[1:].format(name=b["name"],
+               deps=" ".join(b["deps"]),
+               cc=b.get("cc", "CC"))
+
+def get_deps(objs):
+    deps = set()
+    for obj in objs:
+        src = os.path.splitext(obj)[0] + ".c"
+        with tempfile.NamedTemporaryFile(mode="r") as f:
+            e = subprocess.call(["cc", "-o", "/dev/null", "-M", "-MG", "-MM",
+                                 "-MT", obj, "-MF", f.name, src])
+            if e:
+                sys.stderr.write("warning: dependency generation for "
+                                 "{obj} failed\n")
+                sys.stderr.flush()
+            deps.update(s.strip() for s in f.read().split("\n\n"))
+    return "\n\n".join(sorted(deps))
+
+objs = itertools.chain(*(b["deps"] for b in bins))
+
+macros = {
+    "MPICC": "mpicc",
+    "CFLAGS": "-g -O2 -std=c99 -Wall -Wconversion -Wextra -pedantic",
+}
+
+subst = {
+    "macros": "".join("{}={}\n".format(k, v) for k, v in macros.items()),
+    "bins": "\n".join(bin_rule(b) for b in bins).rstrip("\n"),
+    "deps": get_deps(objs),
+}
+
+with open("Makefile.in") as f:
+    template = f.read()
+with open("Makefile", "w") as f:
+    f.write(template.format(**subst))
+
+if os.path.basename(__file__) != "config.status":
+    try:
+        os.remove("config.status")
+    except OSError:
+        pass
+    try:
+        os.link(__file__, "config.status")
+    except OSError:
+        shutil.copy(__file__, "config.status")

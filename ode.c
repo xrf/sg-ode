@@ -946,7 +946,7 @@ void ode_init(struct Ode *self, struct SgVectorDriver drv)
     sg_vector_fill(self->drv, self->ypout, 0.0);
     for (i = 0; i < sizeof(self->phi) / sizeof(*self->phi); ++i) {
         self->phi[i] = sg_vector_new(self->drv);
-        sg_vector_fill(self->drv, self->phi[i], 0.0);
+//        sg_vector_fill(self->drv, self->phi[i], 0.0);
     }
 }
 

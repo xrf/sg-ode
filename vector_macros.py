@@ -60,7 +60,7 @@ extern "C" {
 #endif
 
 """[1:])
-    for n in range(8):
+    for n in range(1, 9):
         write_macro(f, n)
     f.write("""
 #ifdef __cplusplus
