@@ -31,7 +31,7 @@ typedef void *Accum;
 */
 typedef int AccumType;
 
-/** An operation suitable for use in `#ProtoVector.fold_map`.
+/** An operation suitable for use in `#ProtoVectorVtable.fold_map`.
 
     @param[in,out] f_ctx      The same `f_ctx` pointer provided to `fold_map`.
     @param[in,out] accum      The accumulated value so far.
