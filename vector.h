@@ -163,15 +163,71 @@ void sg_vector_operate(struct SgVectorDriver drv,
 
 /** Set every element of a vector to the same value. */
 void sg_vector_fill(struct SgVectorDriver drv,
-                    const SgVector *vector, double value);
+                    double value,
+                    SgVector *vector);
 
 extern SgVectorOperation sg_vector_fill_operation;
 
 /** Copy the contents of a vector. */
 void sg_vector_copy(struct SgVectorDriver drv,
-                    const SgVector *src, SgVector *dest);
+                    const SgVector *src,
+                    SgVector *dest);
 
 extern SgVectorOperation sg_vector_copy_operation;
+
+void sg_vector_neg_assign(struct SgVectorDriver drv, SgVector *z);
+
+extern SgVectorOperation sg_vector_neg_assign_operation;
+
+void sg_vector_neg(struct SgVectorDriver drv, const SgVector *x, SgVector *z);
+
+extern SgVectorOperation sg_vector_neg_operation;
+
+/** In-place scalar multiplication of a vector. */
+void sg_vector_scale_assign(struct SgVectorDriver drv,
+                            double alpha,
+                            SgVector *z);
+
+extern SgVectorOperation sg_vector_scale_assign_operation;
+
+/** Calculate scalar multiplication of a vector.
+
+    The input vectors may completely overlap with the output vector.  Partial
+    overlaps are not allowed.
+ */
+void sg_vector_scale(struct SgVectorDriver drv,
+                     double alpha,
+                     const SgVector *x,
+                     SgVector *z);
+
+extern SgVectorOperation sg_vector_scale_operation;
+
+/** Calculate `z ← α z + β y`.
+
+    The input vector `y` may completely overlap with the output vector `z`.
+    Partial overlaps are not allowed.
+ */
+void sg_vector_linear_assign(struct SgVectorDriver drv,
+                             double alpha,
+                             double beta,
+                             const SgVector *y,
+                             SgVector *z);
+
+extern SgVectorOperation sg_vector_linear_assign_operation;
+
+/** Calculate the linear combination of two vectors.
+
+    Either or both input vectors may completely overlap with the output
+    vector.  Partial overlaps are not allowed.
+ */
+void sg_vector_linear(struct SgVectorDriver drv,
+                      double alpha,
+                      const SgVector *x,
+                      double beta,
+                      const SgVector *y,
+                      SgVector *z);
+
+extern SgVectorOperation sg_vector_linear_operation;
 
 /** Sums the values of a vector. */
 double sg_vector_sum(struct SgVectorDriver drv, const SgVector *vector);

@@ -27,7 +27,7 @@ int main(void)
         SgVector *u = sg_vector_new(drv);
         double sum;
 
-        sg_vector_fill(drv, v, 1.0);
+        sg_vector_fill(drv, 1.0, v);
         sum = sg_vector_sum(drv, v);
         assert(sum == sg_vector_len(drv));
 

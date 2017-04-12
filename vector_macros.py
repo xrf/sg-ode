@@ -12,12 +12,13 @@ def write_macro(f, n):
     for i in range(n):
         f.write(f"var{i}, ")
     f.write("block) \\\n")
-    f.write("    static void name##_inner(const size_t _offset, ")
+    f.write("    static void name##_inner(const void *restrict ctx, const size_t _offset, ")
     for i in range(n):
         f.write(f"double *const restrict _v{i}, ")
     f.write("const size_t _num_elems) \\\n")
     f.write("""
     { \\
+        (void)ctx; \\
         size_t _i; \\
         for (_i = 0; _i < _num_elems; ++_i) { \\
             size_t index = _offset + _i; \\
@@ -36,11 +37,10 @@ def write_macro(f, n):
                      double **data, \\
                      size_t num_elems) \\
     { \\
-        (void)f_ctx; \\
         (void)accum; \\
         (void)val; \\
         if (num_elems) { \\
-            name##_inner(offset, """[1:])
+            name##_inner(f_ctx, offset, """[1:])
     for i in range(n):
         f.write(f"data[{i}], ")
     f.write("""num_elems); \\

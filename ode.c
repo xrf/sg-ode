@@ -8,7 +8,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "utils.h"
 #include "vector.h"
+#include "vector_macros.h"
 #include "ode.h"
 
 typedef void (*fn_type)(void *f_ctx,
@@ -16,27 +18,42 @@ typedef void (*fn_type)(void *f_ctx,
                         const SgVector *restrict y,
                         SgVector *restrict yp);
 
-static double min(double x, double y)
+static void vector_div_normsq_operation_inner(double *sum,
+                                              const double *restrict numer,
+                                              const double *restrict denom,
+                                              size_t num_elems)
 {
-    return x < y ? x : y;
-}
-
-static double max(double x, double y)
-{
-    return x >= y ? x : y;
-}
-
-static void clear_double_array(double *a, size_t n) {
-    // compilers should be able to optimize this to a simple memset (can't use
-    // a real memset because C standard doesn't guarantee that would work)
     size_t i;
-    for (i = 0; i < n; ++i) {
-        a[i] = 0.0;
+    for (i = 0; i < num_elems; ++i) {
+        *sum += pow(numer[i] / denom[i], 2.0);
     }
 }
 
-static void copy_double_array(double *out, const double *in, size_t n) {
-    memcpy(out, in, n * sizeof(*in));
+static void vector_div_normsq_operation(void *f_ctx,
+                                           SgVectorAccum *accum,
+                                           const SgVectorAccum *val,
+                                           size_t offset,
+                                           double **data,
+                                           size_t num_elems)
+{
+    double s = *(const double *)accum + *(const double *)val;
+    (void)f_ctx;
+    (void)offset;
+    if (num_elems) {
+        vector_div_normsq_operation_inner(&s, data[0], data[1], num_elems);
+    }
+    *(double *)accum = s;
+}
+
+double vector_div_normsq(struct SgVectorDriver drv,
+                         const SgVector *numer,
+                         const SgVector *denom)
+{
+    double accum = 0.0;
+    SgVector *v[] = {(SgVector *)numer, (SgVector *)denom};
+    sg_vector_operate(drv, &accum, -1, &vector_div_normsq_operation, NULL,
+                      0, v, sizeof(v) / sizeof(*v));
+    return accum;
 }
 
 /*
@@ -173,6 +190,7 @@ int step(double *const restrict y,
          double *const restrict yp,
          struct Ode *const self)
 {
+    struct SgVectorDriver drv = self->drv;
     static const double gstr[13] = {
         0.5, 0.0833, 0.0417, 0.0264, 0.0188, 0.0143, 0.0114,
         0.00936, 0.00789, 0.00679, 0.00592, 0.00524, 0.00468
@@ -215,12 +233,8 @@ int step(double *const restrict y,
     }
 
     /* if error tolerance is too small, increase it to an acceptable value */
-    /* round = ‖𝐲 / 𝛚‖² */
-    round = 0.0;
-    for (l = 0; l < neqn; ++l) {
-        round += pow(y[l] / wt[l], 2.0);
-    }
-    round = 2.0 * DBL_EPSILON * sqrt(round);
+    /* round = 2 ε ‖𝐲 / 𝛚‖ */
+    round = 2.0 * DBL_EPSILON * sqrt(vector_div_normsq(drv, y, wt));
     if (p5eps < round) {
         *eps = round * 2.0 * (4.0 * DBL_EPSILON + 1.0);
         return 1;
@@ -234,14 +248,11 @@ int step(double *const restrict y,
         {
             double sum = 0.0;
             /* 𝛗[1] ← 𝟎 */
-            clear_double_array(phi[1], neqn);
+            sg_vector_fill(drv, 0.0, phi[1]);
             /* 𝛗[0] ← 𝐲′ */
-            copy_double_array(phi[0], yp, neqn);
-            /* sum = ‖𝐲′ / 𝛚‖² */
-            for (l = 0; l < neqn; ++l) {
-                sum += pow(yp[l] / wt[l], 2.0);
-            }
-            sum = sqrt(sum);
+            sg_vector_copy(drv, yp, phi[0]);
+            /* sum = ‖𝐲′ / 𝛚‖ */
+            sum = sqrt(vector_div_normsq(drv, yp, wt));
             absh = fabs(*h);
             if (*eps < sum * 16.0 * pow(*h, 2.0)) {
                 absh = sqrt(*eps / sum) * 0.25;
@@ -257,7 +268,7 @@ int step(double *const restrict y,
         if (p5eps <= round * 100.0) {
             *nornd = false;
             /* 𝛗[14] ← 𝟎 */
-            clear_double_array(phi[14], neqn);
+            sg_vector_fill(drv, 0.0, phi[14]);
         }
     }
     ifail = 0;
@@ -276,7 +287,7 @@ int step(double *const restrict y,
             ++*ns;
         }
         if (*k >= *ns) {
-            /* PRE: ns >= 1 */
+            /* PRE: ns ≥ 1 */
 
             temp1 = *h * *ns;
             /* compute those components of alpha, beta, psi, sig which are
@@ -338,17 +349,15 @@ int step(double *const restrict y,
         /* change phi to phi star */
         for (i = *ns; i < *k; ++i) {
             /* 𝛗[i] ← β[i] 𝛗[i] */
-            for (l = 0; l < neqn; ++l) {
-                phi[i][l] *= beta[i];
-            }
+            sg_vector_scale_assign(drv, beta[i], phi[i]);
         }
         /* predict solution and differences */
         /* 𝛗[k + 1] ← 𝛗[k] */
-        copy_double_array(phi[*k + 1], phi[*k], neqn);
+        sg_vector_copy(drv, phi[*k], phi[*k + 1]);
         /* 𝛗[k] ← 𝟎 */
-        clear_double_array(phi[*k], neqn);
+        sg_vector_fill(drv, 0.0, phi[*k]);
         /* 𝐩 ← 𝛗 𝐠 (matrix-vector) */
-        clear_double_array(p, neqn);
+        sg_vector_fill(drv, 0.0, p);
         for (i = *k; i-- > 0;) {
             for (l = 0; l < neqn; ++l) {
                 p[l] += g[i] * phi[i][l];
@@ -635,8 +644,8 @@ void intrp(const struct SgVectorDriver drv,
     /* interpolate */
     /* 𝐲° ← 𝛗 𝐠 (matrix-vector)
        𝐲°′ ← 𝛗 𝛒 (matrix-vector) */
-    clear_double_array(ypout, neqn);
-    clear_double_array(yout, neqn);
+    sg_vector_fill(drv, 0.0, ypout);
+    sg_vector_fill(drv, 0.0, yout);
     for (i = ki; i-- > 0;) {
         const double gi = g[i];
         const double rhoi = rho[i];
@@ -670,7 +679,8 @@ void de(struct Ode *const self,
         const unsigned maxnum,
         int *const restrict iflag)
 {
-    const size_t neqn = sg_vector_len(self->drv);
+    struct SgVectorDriver drv = self->drv;
+    const size_t neqn = sg_vector_len(drv);
     const bool isn = *iflag >= 0;
     const double del = tout - *t;
     const double absdel = fabs(del);
@@ -706,7 +716,7 @@ void de(struct Ode *const self,
         self->start = true;
         self->x = *t;
         /* 𝐘 ← 𝐲 */
-        copy_double_array(self->yy, y, neqn);
+        sg_vector_copy(drv, y, self->yy);
         self->delsgn = copysign(1.0, del);
         self->h = copysign(max(fabs(tout - self->x),
                                4.0 * DBL_EPSILON * fabs(self->x)),
@@ -750,7 +760,7 @@ void de(struct Ode *const self,
                 *iflag = isn ? 5 : -5;
             }
             /* 𝐲 ← 𝐘 */
-            copy_double_array(y, self->yy, neqn);
+            sg_vector_copy(drv, self->yy, y);
             *t = self->x;
             self->told = *t;
             self->isnold = true;
@@ -771,7 +781,7 @@ void de(struct Ode *const self,
             *relerr = eps * releps;
             *abserr = eps * abseps;
             /* 𝐲 ← 𝐘 */
-            copy_double_array(y, self->yy, neqn);
+            sg_vector_copy(drv, self->yy, y);
             *t = self->x;
             self->told = *t;
             self->isnold = true;
@@ -935,18 +945,18 @@ void ode_init(struct Ode *self, struct SgVectorDriver drv)
     self->drv = drv;
     // TODO: which ones actually NEED to be init'ed
     self->yy = sg_vector_new(self->drv);
-    sg_vector_fill(self->drv, self->yy, 0.0);
+    sg_vector_fill(self->drv, 0.0, self->yy);
     self->wt = sg_vector_new(self->drv);
-    sg_vector_fill(self->drv, self->wt, 0.0);
+    sg_vector_fill(self->drv, 0.0, self->wt);
     self->p = sg_vector_new(self->drv);
-    sg_vector_fill(self->drv, self->p, 0.0);
+    sg_vector_fill(self->drv, 0.0, self->p);
     self->yp = sg_vector_new(self->drv);
-    sg_vector_fill(self->drv, self->yp, 0.0);
+    sg_vector_fill(self->drv, 0.0, self->yp);
     self->ypout = sg_vector_new(self->drv);
-    sg_vector_fill(self->drv, self->ypout, 0.0);
+    sg_vector_fill(self->drv, 0.0, self->ypout);
     for (i = 0; i < sizeof(self->phi) / sizeof(*self->phi); ++i) {
         self->phi[i] = sg_vector_new(self->drv);
-//        sg_vector_fill(self->drv, self->phi[i], 0.0);
+//        sg_vector_fill(self->drv, 0.0, self->phi[i]);
     }
 }
 

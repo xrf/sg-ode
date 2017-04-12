@@ -41,24 +41,13 @@ void sg_vector_operate(struct SgVectorDriver drv,
                            offset, vectors, num_vectors);
 }
 
-void sg_vector_copy(struct SgVectorDriver drv,
-                    const SgVector *src, SgVector *dest)
-{
-    SgVector *v[] = {(SgVector *)src, dest};
-    sg_vector_operate(drv, NULL, 0, &sg_vector_copy_operation, NULL,
-                      0, v, sizeof(v) / sizeof(*v));
-}
-
-SG_DEFINE_VECTOR_MAP_2(, sg_vector_copy_operation, src, dest, {
-        *dest = *src;
-    })
-
 void sg_vector_fill(struct SgVectorDriver drv,
-                    const SgVector *vector, double value)
+                    double value,
+                    SgVector *vector)
 {
-    SgVector *v = (SgVector *)vector;
     sg_vector_operate(drv, NULL, 0,
-                      &sg_vector_fill_operation, &value, 0, &v, 1);
+                      &sg_vector_fill_operation, &value,
+                      0, &vector, 1);
 }
 
 void sg_vector_fill_operation(void *f_ctx,
@@ -76,6 +65,9 @@ void sg_vector_fill_operation(void *f_ctx,
         size_t i;
         double *v = data[0];
         if (c == 0.0) {
+            // compilers should be able to optimize this to a simple memset
+            // (can't use a real memset because C standard doesn't guarantee
+            // that would work)
             for (i = 0; i < num_elems; ++i) {
                 v[i] = 0.0;
             }
@@ -86,6 +78,143 @@ void sg_vector_fill_operation(void *f_ctx,
         }
     }
 }
+
+void sg_vector_copy(struct SgVectorDriver drv,
+                    const SgVector *src,
+                    SgVector *dest)
+{
+    SgVector *v[] = {(SgVector *)src, dest};
+    sg_vector_operate(drv, NULL, 0, &sg_vector_copy_operation, NULL,
+                      0, v, sizeof(v) / sizeof(*v));
+}
+
+SG_DEFINE_VECTOR_MAP_2(, sg_vector_copy_operation, src, dest, {
+        *dest = *src;
+    })
+
+void sg_vector_neg_assign(struct SgVectorDriver drv, SgVector *z)
+{
+    sg_vector_operate(drv, NULL, 0,
+                      &sg_vector_neg_assign_operation, NULL,
+                      0, &z, 1);
+}
+
+SG_DEFINE_VECTOR_MAP_1(, sg_vector_neg_assign_operation, z, {
+        *z *= -1.0;
+    })
+
+void sg_vector_neg(struct SgVectorDriver drv, const SgVector *x, SgVector *z)
+{
+    SgVector *v[] = {(SgVector *)x, z};
+    sg_vector_operate(drv, NULL, 0,
+                      &sg_vector_neg_assign_operation, NULL,
+                      0, v, sizeof(v) / sizeof(*v));
+}
+
+SG_DEFINE_VECTOR_MAP_2(, sg_vector_neg_operation, z, x, {
+        *z = -*x;
+    })
+
+void sg_vector_scale_assign(struct SgVectorDriver drv,
+                            double alpha,
+                            SgVector *z)
+{
+    if (alpha == 0.0) {
+        sg_vector_fill(drv, 0.0, z);
+    } else if (alpha == 1.0) {
+        /* do nothing */
+    } else if (alpha == -1.0) {
+        sg_vector_neg_assign(drv, z);
+    } else {
+        sg_vector_operate(drv, NULL, 0,
+                          &sg_vector_scale_assign_operation, &alpha,
+                          0, &z, 1);
+    }
+}
+
+SG_DEFINE_VECTOR_MAP_1(, sg_vector_scale_assign_operation, z, {
+        const double c = *(const double *)ctx;
+        *z *= c;
+    })
+
+void sg_vector_scale(struct SgVectorDriver drv,
+                     double alpha,
+                     const SgVector *x,
+                     SgVector *z)
+{
+    if (x == z) {
+        sg_vector_scale_assign(drv, alpha, z);
+    } else if (alpha == 0.0) {
+        sg_vector_fill(drv, 0.0, z);
+    } else if (alpha == 1.0) {
+        /* do nothing */
+    } else if (alpha == -1.0) {
+        sg_vector_neg(drv, x, z);
+    } else {
+        SgVector *v[] = {(SgVector *)x, z};
+        sg_vector_operate(drv, NULL, 0,
+                          &sg_vector_scale_operation, &alpha,
+                          0, v, sizeof(v) / sizeof(*v));
+    }
+}
+
+SG_DEFINE_VECTOR_MAP_2(, sg_vector_scale_operation, x, z, {
+        const double c = *(const double *)ctx;
+        *z = c * *x;
+    })
+
+void sg_vector_linear_assign(struct SgVectorDriver drv,
+                             double alpha,
+                             double beta,
+                             const SgVector *y,
+                             SgVector *z)
+{
+    if (y == z || beta == 0.0) {
+        sg_vector_scale_assign(drv, alpha + beta, z);
+    } else if (alpha == 0.0) {
+        sg_vector_scale(drv, beta, y, z);
+    } else {
+        double c[] = {alpha, beta};
+        SgVector *v[] = {(SgVector *)y, z};
+        sg_vector_operate(drv, NULL, 0,
+                          &sg_vector_linear_assign_operation, &c,
+                          0, v, sizeof(v) / sizeof(*v));
+    }
+}
+
+SG_DEFINE_VECTOR_MAP_2(, sg_vector_linear_assign_operation, y, z, {
+        const double *const c = (const double *)ctx;
+        *z = c[0] * *z + c[1] * *y;
+    })
+
+void sg_vector_linear(struct SgVectorDriver drv,
+                      double alpha,
+                      const SgVector *x,
+                      double beta,
+                      const SgVector *y,
+                      SgVector *z)
+{
+    if (x == z) {
+        sg_vector_linear_assign(drv, alpha, beta, y, z);
+    } else if (y == z) {
+        sg_vector_linear_assign(drv, beta, alpha, x, z);
+    } else if (alpha == 0.0) {
+        sg_vector_scale(drv, beta, y, z);
+    } else if (beta == 0.0) {
+        sg_vector_scale(drv, alpha, x, z);
+    } else {
+        double c[] = {alpha, beta};
+        SgVector *v[] = {(SgVector *)x, (SgVector *)y, z};
+        sg_vector_operate(drv, NULL, 0,
+                          &sg_vector_linear_operation, &c,
+                          0, v, sizeof(v) / sizeof(*v));
+    }
+}
+
+SG_DEFINE_VECTOR_MAP_3(, sg_vector_linear_operation, x, y, z, {
+        const double *const c = (const double *)ctx;
+        *z = c[0] * *x + c[1] * *y;
+    })
 
 double sg_vector_sum(struct SgVectorDriver drv, const SgVector *vector)
 {

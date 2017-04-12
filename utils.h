@@ -7,13 +7,24 @@
 extern "C" {
 #endif
 
-static inline void *check_oom(void *ptr) {
+static inline void *check_oom(void *ptr)
+{
     if (!ptr) {
         fprintf(stderr, "Out of memory\n");
         fflush(stderr);
         abort();
     }
     return ptr;
+}
+
+static inline double min(double x, double y)
+{
+    return x < y ? x : y;
+}
+
+static inline double max(double x, double y)
+{
+    return x >= y ? x : y;
 }
 
 #ifdef __cplusplus
