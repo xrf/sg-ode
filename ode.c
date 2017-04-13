@@ -362,9 +362,6 @@ void vector_update_wt(struct SgVectorDriver drv,
   @param yp
   Derivative of solution vector at `x` after successful step (length: `neqn`)
 
-  @param neqn
-  Number of equations to be integrated
-
   @param h
   Appropriate step size for next step.  Normally determined by code
 
@@ -390,7 +387,7 @@ void vector_update_wt(struct SgVectorDriver drv,
   @return
   Nonzero when no step can be taken, zero otherwise (`crash`).
 
-  The arrays `phi`, `psi` are required for the interpolation subroutine
+  The arrays `phi`, `psi` are required for the interpolation function
   `intrp`.  The array `p` is internal to the code.
 
   # Input to `step`
@@ -402,8 +399,8 @@ void vector_update_wt(struct SgVectorDriver drv,
 
       y[neqn], wt[neqn], phi[neqn * 16], p[neqn], yp[neqn], psi[12]
 
-  The user must also declare the `start` Boolean variable and `f` an external
-  subroutine, supply the subroutine `f(f_ctx, x, y, yp)` to evaluate
+  The user must also declare the `start` Boolean variable and the function
+  `f(f_ctx, x, y, yp)` to evaluate
 
       dy[i]/dx = yp[i] = f(x, y[0], y[1], ..., y[neqn - 1])
 
@@ -411,7 +408,6 @@ void vector_update_wt(struct SgVectorDriver drv,
 
     - `x`: Initial value of the independent variable
     - `y`: Vector of initial values of dependent variables
-    - `neqn`: Number of equations to be integrated
     - `h`: Nominal step size indicating direction of integration
            and maximum size of step.
     - `eps`: Local error tolerance per step.
@@ -436,15 +432,15 @@ void vector_update_wt(struct SgVectorDriver drv,
 
   ## Subsequent calls
 
-  Subroutine `step` is designed so that all information needed to continue the
+  Function `step` is designed so that all information needed to continue the
   integration, including the step size `h` and the order `k`, is returned with
   each step.  With the exception of the step size, the error tolerance, and
   the weights, none of the parameters should be altered.  The array `wt` must
   be updated after each step to maintain relative error tests like those
   above.  Normally the integration is continued just beyond the desired
-  endpoint and the solution interpolated there with subroutine `intrp`.  If it
-  is impossible to integrate beyond the endpoint, the step size may be reduced
-  to hit the endpoint since the code will not take a step larger than the `h`
+  endpoint and the solution interpolated there with `intrp`.  If it is
+  impossible to integrate beyond the endpoint, the step size may be reduced to
+  hit the endpoint since the code will not take a step larger than the `h`
   input.  Changing the direction of integration, i.e., the sign of h ,
   requires the user set `start = true` before calling `step` again.  This is
   the only situation in which `start` should be altered.
@@ -453,16 +449,16 @@ void vector_update_wt(struct SgVectorDriver drv,
 
   ## Successful step
 
-  The subroutine returns zero after each successful step with `start`
-  set to `false`.  `x` represents the independent variable advanced one step
-  of length hold from its value on input and `y` the solution vector at the
-  new value of `x`.  All other parameters represent information corresponding
-  to the new `x` needed to continue the integration.
+  The function returns zero after each successful step with `start` set to
+  `false`.  `x` represents the independent variable advanced one step of
+  length hold from its value on input and `y` the solution vector at the new
+  value of `x`.  All other parameters represent information corresponding to
+  the new `x` needed to continue the integration.
 
   ## Unsuccessful step
 
   When the error tolerance is too small for the machine precision, the
-  subroutine returns nonzero without taking a step.  An appropriate step size
+  function returns nonzero without taking a step.  An appropriate step size
   and error tolerance for continuing are estimated and all other information
   is restored as upon input before returning.  To continue with the larger
   tolerance, the user just calls the code again.  A restart is neither
@@ -817,8 +813,8 @@ int step(double *const restrict y,
 }
 
 /*
-  The methods in subroutine `step` approximate the solution near `x` by a
-  polynomial.  Subroutine `intrp` approximates the solution at `xout` by
+  The methods in function `step` approximate the solution near `x` by a
+  polynomial.  Function `intrp` approximates the solution at `xout` by
   evaluating the polynomial there.  Information defining this polynomial is
   passed from `step` so `intrp` cannot be used alone.
 
@@ -828,7 +824,7 @@ int step(double *const restrict y,
   list and defines `xout`, point at which solution is desired.
 
   The remaining parameters are defined in `step` and passed to `intrp` from
-  that subroutine.
+  that function.
 
   # Output from `intrp`
 
@@ -913,7 +909,6 @@ void de(struct Ode *const self,
         int *const restrict iflag)
 {
     struct SgVectorDriver drv = self->drv;
-    const size_t neqn = sg_vector_len(drv);
     const bool isn = *iflag >= 0;
     const double del = tout - *t;
     const double absdel = fabs(del);
@@ -924,10 +919,17 @@ void de(struct Ode *const self,
     int kle4;
     unsigned nostep;
 
+    /* trivial case */
+    if (sg_vector_len(self->drv) == 0) {
+        *iflag = 2;
+        *t = tout;
+        return;
+    }
+
     /* test for improper parameters */
     eps = max(*relerr, *abserr);
     *iflag = abs(*iflag);
-    if (neqn < 1 || *t == tout ||
+    if (*t == tout ||
         *relerr < 0.0 || *abserr < 0.0 ||
         eps <= 0.0 || *iflag == 0 ||
         (*iflag != 1 && (*t != self->told || *iflag < 2 || *iflag > 5))) {
@@ -937,7 +939,7 @@ void de(struct Ode *const self,
 
     /* on each call set interval of integration and counter for number of
        steps.  adjust input error tolerances to define weight vector for
-       subroutine step */
+       `step` */
     kle4 = 0;
     stiff = false;
     releps = *relerr / eps;
@@ -1034,8 +1036,8 @@ void de(struct Ode *const self,
       dy[i]/dt = f(t, y[0], y[1], ..., y[neqn - 1])
       y[i] given at `t`
 
-  The subroutine integrates from `t` to `tout`.  On return the parameters in
-  the call list are set for continuing the integration.  The user has only to
+  The function integrates from `t` to `tout`.  On return the parameters in the
+  call list are set for continuing the integration.  The user has only to
   define a new value `tout` and call `ode` again.
 
   The differential equations are actually solved by a suite of codes `de`,
@@ -1057,10 +1059,7 @@ void de(struct Ode *const self,
   L. F. Shampine and M. K. Gordon.
 
   @param f
-  Subroutine `f(f_ctx, t, y, yp)` to evaluate derivatives `yp[i] = dy[i]/dt`
-
-  @param neqn
-  Number of equations to be integrated
+  Function `f(f_ctx, t, y, yp)` to evaluate derivatives `yp[i] = dy[i]/dt`
 
   @param y
   Solution vector at `t` (length: `neqn`)
@@ -1084,28 +1083,18 @@ void de(struct Ode *const self,
   @param iflag
   Indicates status of integration
 
-  @param work
-  Arrays to hold information internal to `de` which is necessary for
-  subsequent calls (length: `21 * neqn`)
-
   @param self
   Arrays to hold information internal to `de` which is necessary for
   subsequent calls (length: `5`)
 
   # First call to `ode`
 
-  The user must provide storage in their calling program for the arrays
-  in the call list,
-
-      y[neqn], work[21 * neqn], self
-
-  Supply supply the subroutine `f(f_ctx, t, y, yp)` to evaluate
+  The user must supply a function `f(f_ctx, t, y, yp)` to evaluate
 
       dy[i]/dt = yp[i] = f(t, y[0], y[1], ..., y[neqn - 1])
 
   and initialize the parameters:
 
-    - `neqn`: Number of equations to be integrated
     - `y`: Vector of initial conditions
     - `t`: Starting point of integration
     - `tout`: Point at which solution is desired
@@ -1114,12 +1103,11 @@ void de(struct Ode *const self,
       is `+1`.  The user should set `iflag = -1` only if it is impossible to
       continue the integration beyond `tout`.
 
-  All parameters except `f`, `neqn` and `tout` may be altered by the code on
-  output so must be variables in the calling program.
+  All parameters except `f` and `tout` may be altered by the code on output so
+  must be variables in the calling program.
 
   # Output from `ode`
 
-    - `neqn`: Unchanged
     - `y`: Solution at `t`
     - `t`: Last point reached in integration.  normal return has `t == tout`.
     - `tout`: Unchanged
@@ -1141,7 +1129,7 @@ void de(struct Ode *const self,
 
   # Subsequent calls to `ode`
 
-  Subroutine `ode` returns with all information needed to continue the
+  Function `ode` returns with all information needed to continue the
   integration.  If the integration reached `tout`, the user need only define a
   new `tout` and call again.  If the integration did not reach `tout` and the
   user wants to continue, simply call again.  The output value of `iflag` is
