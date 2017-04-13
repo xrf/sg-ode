@@ -7,9 +7,32 @@
 #include <math.h>
 #include "vector.h"
 #include "extern.h"
+#include "restrict_begin.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/** Do not integrate beyond the target. */
+#define SG_ODE_FSTRICT 0x1
+
+/** Integration did not reach target because the error tolerances were too
+    small given the limitations of machine precision.
+
+    In the case of `sg_ode_de`, the `relerr` and `abserr` will have been
+    updated to be more reasonable, and one may re-attempt solution with the
+    arguments unchanged. */
+#define SG_ODE_ETOLER 3
+
+/** Integration did not reach target because more than `maxnum` steps were
+    taken. */
+#define SG_ODE_ESTEPS 4
+
+/** Integration did not reach target because more than `maxnum` steps were
+    taken.  In particular, the equations appear to be stiff. */
+#define SG_ODE_ESTIFF 5
+
+/** Invalid argument(s). */
+#define SG_ODE_EINVAL 6
 
 typedef void SgDerivFn(void *f_ctx,
                        double t,
@@ -314,7 +337,81 @@ SG_EXTERN void sg_ode_de(struct SgOde *self,
                          unsigned maxnum,
                          int *restrict iflag);
 
+/**
+   Simple interface to the ODE solver.
+
+   This is the same interface that sg-ode has had in older versions.  It is
+   less flexible but may be easier to use for simple problems.
+
+   This interface does not support generic vectors or parallelized vector
+   operations.  It also does not allow resumption if the tolerance is too
+   small.  The number of steps (`maxnum`) is limited to 500 per invocation.
+
+   @param[in,out] f_ctx
+     An arbitrary pointer that is passed as the first argument to all
+     invocations of `f`.
+
+   @param[in] f
+     A function that evaluates the right hand side of the ODE and stores the
+     result in the array `yp`.  Note that `y` and `yp` will not overlap.
+
+   @param[in] neqn
+     The number of elements in the array `y`.
+
+   @param[in,out] y
+     On entry, the array is expected hold the initial value of the vector `y`.
+     On return, it is replaced with integrated result.
+
+   @param[in,out] t
+     On entry, the argument is expected to hold the initial value of the
+     variable `t`.  On return, it is replaced with the value at which the
+     integration stopped.  When resuming integration, `t` must contain the
+     same value as before.
+
+   @param[in] tout
+     The target value of `t`.
+
+   @param[in] relerr, abserr
+     The relative and absolute tolerances.  At each step, the code maintains
+     `fabs(local_error) <= fabs(y) * relerr + abserr` for each component of
+     the local error and solution vectors.  Both are required to be positive.
+
+   @param[in] flag
+     Either `#SG_ODE_FSTRICT` or zero.  If `#SG_ODE_FSTRICT` is not specified,
+     then the solver may integrate slightly past the target.
+
+   @param[in,out] work
+     A buffer of length `21 * neqn + 100`.  When resuming integration, it must
+     retain the same contents as before. (The buffer does not need to be
+     initialized when starting a new integration.)
+
+   @param[in,out] iwork
+     A buffer of length 5.  When starting a new integration, the buffer *must
+     be initialized to zero*.  When resuming integration, it must retain the
+     same contents as before.
+
+   @return
+     Zero if the integration was successful.  Otherwise, returns one of the
+     following:
+     - `#SG_ODE_ETOLER`
+     - `#SG_ODE_ESTEPS`
+     - `#SG_ODE_ESTIFF`
+     - `#SG_ODE_EINVAL`
+*/
+SG_EXTERN int sg_ode(void *f_ctx,
+                     void (*f)(void *, double, const double *, double *),
+                     size_t neqn,
+                     double *restrict y,
+                     double *restrict t,
+                     double tout,
+                     double relerr,
+                     double abserr,
+                     int flag,
+                     double *restrict work,
+                     int *iwork);
+
 #ifdef __cplusplus
 }
 #endif
+#include "restrict_end.h"
 #endif

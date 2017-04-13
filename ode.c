@@ -762,8 +762,8 @@ void sg_ode_de(struct SgOde *const self,
     int kle4;
     unsigned nostep;
 
-    /* trivial case */
-    if (sg_vector_len(self->drv) == 0) {
+    /* trivial cases */
+    if (sg_vector_len(self->drv) == 0 || *t == tout) {
         *iflag = 2;
         *t = tout;
         return;
@@ -772,8 +772,7 @@ void sg_ode_de(struct SgOde *const self,
     /* test for improper parameters */
     eps = max(*relerr, *abserr);
     *iflag = abs(*iflag);
-    if (*t == tout ||
-        *relerr < 0.0 || *abserr < 0.0 ||
+    if (*relerr < 0.0 || *abserr < 0.0 ||
         eps <= 0.0 || *iflag == 0 ||
         (*iflag != 1 && (*t != self->told || *iflag < 2 || *iflag > 5))) {
         *iflag = 6;
@@ -896,4 +895,183 @@ void sg_ode_del(struct SgOde *self)
     sg_vector_del(self->drv, self->p);
     sg_vector_del(self->drv, self->wt);
     sg_vector_del(self->drv, self->yy);
+}
+
+static SgVector *vector_try_new(SgVectorDriverBase *self)
+{
+    (void)self;
+    fprintf(stderr, "try_new is not supported for this driver\n");
+    fflush(stderr);
+    abort();
+}
+
+static void vector_del(SgVectorDriverBase *self, SgVector *vector)
+{
+    (void)self;
+    (void)vector;
+    fprintf(stderr, "del is not supported for this driver\n");
+    fflush(stderr);
+    abort();
+}
+
+typedef void SimpleDerivFn(void *, double, const double *, double *);
+
+struct SimpleDerivFnCtx {
+    SimpleDerivFn *f;
+    void *ctx;
+};
+
+static void wrapper(void *ctx,
+                    double t,
+                    const SgVector *restrict y,
+                    SgVector *restrict yp)
+{
+    struct SimpleDerivFnCtx *mctx = (struct SimpleDerivFnCtx *)ctx;
+    (*mctx->f)(mctx->ctx, t, (const double *)y, (double *)yp);
+}
+
+int sg_ode(void *f_ctx,
+           SimpleDerivFn *f,
+           size_t neqn,
+           double *restrict y,
+           double *restrict t,
+           double tout,
+           double relerr,
+           double abserr,
+           int flag,
+           double *restrict work,
+           int *iwork)
+{
+    struct SgVectorDriverVt vt = {
+        &vector_try_new,
+        &vector_del,
+        SG_BASIC_VECTOR_DRIVER_VT.operate
+    };
+    struct SimpleDerivFnCtx ctx = {f, f_ctx};
+    struct SgVectorDriver drv = {&neqn, &vt};
+    struct SgOde self;
+    const size_t iwork_len = 5;
+    const size_t work_len = 100 + 21 * neqn;
+    const size_t told_index = 91;
+    size_t i, j = 99;
+
+    /* iwork[1] is always nonzero if we're resuming an existing integration */
+    const int resume = iwork && iwork[1];
+
+    /* the solver only cares about whether |iflag| is 1 or something else
+       (although zero will cause a fatal error) so we just choose 2 for
+       resuming integration */
+    int iflag = (flag & SG_ODE_FSTRICT ? -1 : 1) * (resume ? 2 : 1);
+
+    /* make sure the arguments are valid */
+    if (flag < 0 || flag > SG_ODE_FSTRICT) {
+        fprintf(stderr, "sg_ode: invalid argument for 'flag'\n");
+        fflush(stderr);
+        return SG_ODE_EINVAL;
+    }
+    if (abs(resume) > 1) {
+        fprintf(stderr, "sg_ode: 'iwork' seems to be corrupt\n");
+        fflush(stderr);
+        return SG_ODE_EINVAL;
+    }
+    if (neqn == 0 || *t == tout) {
+        /* there's nothing to do! */
+        *t = tout;
+        return 0;
+    }
+    if (!f || !y || !t || !work || !iwork) {
+        fprintf(stderr, "sg_ode: received null argument(s)\n");
+        return SG_ODE_EINVAL;
+    }
+    if (resume && !(*t == work[told_index])) {
+        fprintf(stderr, "sg_ode: can't resume from a different 't'\n");
+        return SG_ODE_EINVAL;
+    }
+
+    /* clear the workspace at the beginning */
+    if (!resume) {
+        for (i = 0; i < work_len; ++i) {
+            work[i] = 0.0;
+        }
+    }
+
+    self.drv = drv;
+    self.yy = work + j;
+    j += neqn;
+    self.wt = work + j;
+    j += neqn;
+    self.p = work + j;
+    j += neqn;
+    self.yp = work + j;
+    j += neqn;
+    self.ypout = work + j;
+    j += neqn;
+    for (i = 0; i < sizeof(self.phi) / sizeof(*self.phi); ++i) {
+        self.phi[i] = work + j;
+        j += neqn;
+    }
+
+    if (resume) {
+        memcpy(&self.alpha, &work[0], sizeof(self.alpha));
+        memcpy(&self.beta, &work[12], sizeof(self.beta));
+        memcpy(&self.sig, &work[24], sizeof(self.sig));
+        memcpy(&self.v, &work[37], sizeof(self.v));
+        memcpy(&self.w, &work[49], sizeof(self.w));
+        memcpy(&self.g, &work[61], sizeof(self.g));
+        memcpy(&self.psi, &work[75], sizeof(self.psi));
+        self.x = work[87];
+        self.h = work[88];
+        self.hold = work[89];
+        self.told = work[91];
+        self.delsgn = work[92];
+
+        self.ns = (unsigned)iwork[0];
+        self.k = (unsigned)iwork[2];
+        self.kold = (unsigned)iwork[3];
+        self.isnold = iwork[4];
+
+        self.start = work[90] > 0.0;
+        self.phase1 = work[74] > 0.0;
+        self.nornd = iwork[1] != -1;
+    }
+
+    sg_ode_de(&self, wrapper, &ctx, y, t, tout, &relerr, &abserr, 500, &iflag);
+
+    iwork[0] = (int)self.ns;
+    iwork[1] = self.nornd ? 1 : -1;
+    iwork[2] = (int)self.k;
+    iwork[3] = (int)self.kold;
+    iwork[4] = self.isnold;
+
+    memcpy(&work[0], &self.alpha, sizeof(self.alpha));
+    memcpy(&work[12], &self.beta, sizeof(self.beta));
+    memcpy(&work[24], &self.sig, sizeof(self.sig));
+    memcpy(&work[37], &self.v, sizeof(self.v));
+    memcpy(&work[49], &self.w, sizeof(self.w));
+    memcpy(&work[61], &self.g, sizeof(self.g));
+    work[74] = self.phase1 ? 1.0 : -1.0;
+    memcpy(&work[75], &self.psi, sizeof(self.psi));
+    work[87] = self.x;
+    work[88] = self.h;
+    work[89] = self.hold;
+    work[90] = self.start ? 1.0 : -1.0;
+    work[91] = self.told;
+    work[92] = self.delsgn;
+
+    /* 'ode' returns a signed flag depending on whether FSTRICT is enabled;
+       we don't want that */
+    iflag = abs(iflag);
+
+    /* 'ode' returns 2 on success */
+    if (iflag != 2) {
+        /* clear the workspace on failure */
+        for (i = 0; i < work_len; ++i) {
+            work[i] = 0.0;
+        }
+        memset(iwork, 0, iwork_len * sizeof(*iwork));
+        return iflag;
+    }
+
+    assert(abs(iwork[1]) <= 1);
+    return 0;
 }

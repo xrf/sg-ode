@@ -18,8 +18,7 @@
 #include <stdio.h>
 #include "ode.h"
 
-void f(void *ctx, double t, const SgVector *restrict y_vec,
-       SgVector *restrict yp_vec)
+void f(void *ctx, double t, const double *y_vec, double *yp_vec)
 {
     static const double ksq = 0.51;
     const double *const y = (const double *)y_vec;
@@ -33,20 +32,14 @@ void f(void *ctx, double t, const SgVector *restrict y_vec,
 
 int main(void)
 {
-    static const unsigned maxnum = 500;
     static const size_t neqn = 3;
-    double t, tout;
-    int i;
-    struct SgOde solver;
-    double relerr = 1.0e-9;
-    double abserr = 1.0e-16;
+    static const double relerr = 1.0e-9;
+    static const double abserr = 1.0e-16;
     int iflag = 1;
-    struct SgBasicVectorDriver mdrv = sg_basic_vector_driver_new(3);
-    struct SgVectorDriver drv = sg_basic_vector_driver_get(&mdrv);
-    SgVector *y_vec = sg_vector_new(drv);
-    double *y = (double *)y_vec;
-
-    sg_ode_init(&solver, drv);
+    double t;
+    int i;
+    int iwork[5] = {0};
+    double y[3], work[100 + 21 * 3];
 
     printf("neqn=%zu relerr=%g abserr=%g iflag=%i\n",
            neqn, relerr, abserr, iflag);
@@ -62,34 +55,11 @@ int main(void)
     dump();
 
     for (i = 1; i <= 12; ++i) {
-        tout = 5.0 * i;
-    retry:
-        sg_ode_de(&solver, f, NULL, y_vec, &t, tout,
-                  &relerr, &abserr, maxnum, &iflag);
+        double tout = 5.0 * i;
+        int r;
+        r = sg_ode(NULL, &f, neqn, y, &t, tout, relerr, abserr, 0, work, iwork);
+        iflag = r == 0 ? 2 : iflag;
         dump();
-        switch (iflag) {
-        case 1:
-            return 1;
-        case 2:
-            continue;
-        case 3:
-            printf("tolerances too much and have been changed\n");
-            goto retry;
-        case 4:
-            printf("too many steps...eqn. is hard\n");
-            return 1;
-        case 5:
-            printf("eqn. appears to be stiff\n");
-            return 1;
-        case 6:
-            printf("invalid input arguments\n");
-            return 1;
-        default:
-            printf("unexpected iflag\n");
-            return 1;
-        }
     }
-    sg_ode_del(&solver);
-    sg_vector_del(drv, y_vec);
     return 0;
 }

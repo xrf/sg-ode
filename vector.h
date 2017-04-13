@@ -4,6 +4,9 @@
     A generic interface for elementwise and aggregate operations on vectors.
 */
 #include <stddef.h>
+#include "extern.h"
+#include "inline_begin.h"
+#include "restrict_begin.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -63,12 +66,11 @@ typedef void SgVectorOperation(void *f_ctx,
 
 /** Minimal structure of an `SgVectorDriverBase` object (“base class”).  An
     actual instance may hold additional information, but all drivers must
-    store `SgVectorDriverBase` as their first element. */
-struct SgVectorDriverBase {
-    /** The length of all vectors created by this driver.  Once a driver has
-        been created, this attribute must not be modified. */
-    size_t len;
-};
+    store `SgVectorDriverBase` (i.e. a length) as their first element.
+
+    This should be the length of all vectors created by this driver.  Once a
+    driver has been created, this attribute must not be modified. */
+typedef size_t SgVectorDriverBase;
 
 /** The minimal set of operations that a vector driver must support.
 
@@ -82,10 +84,10 @@ struct SgVectorDriverBase {
 struct SgVectorDriverVt {
     /** Creates a new uninitialized vector with a fixed length determined by
         the `SgVectorDriver`. */
-    SgVector *(*try_new)(struct SgVectorDriverBase *self);
+    SgVector *(*try_new)(SgVectorDriverBase *self);
 
     /** Destroys a vector. */
-    void (*del)(struct SgVectorDriverBase *self, SgVector *vector);
+    void (*del)(SgVectorDriverBase *self, SgVector *vector);
 
     /** Applies an element-wise operation (map) to a set of vectors and then
         accumulates a combined result (fold) of a monoidal operation.
@@ -121,7 +123,7 @@ struct SgVectorDriverVt {
         The number of `vectors`.
 
     */
-    void (*operate)(struct SgVectorDriverBase *self,
+    void (*operate)(SgVectorDriverBase *self,
                     SgVectorAccum *accum,
                     SgVectorAccumType accum_type,
                     SgVectorOperation *f,
@@ -134,118 +136,128 @@ struct SgVectorDriverVt {
 /** A vector driver.  This is just a driver pointer combined with its vtable
     pointer for convenience. */
 struct SgVectorDriver {
-    struct SgVectorDriverBase *data;
+    SgVectorDriverBase *data;
     struct SgVectorDriverVt *vtable;
 };
 
 /** Creates a vectorm, returning `NULL` if it fails. */
-SgVector *sg_vector_try_new(struct SgVectorDriver drv);
+SG_EXTERN SgVector *sg_vector_try_new(struct SgVectorDriver drv);
 
 /** Creates a vector. */
-SgVector *sg_vector_new(struct SgVectorDriver drv);
+SG_EXTERN SgVector *sg_vector_new(struct SgVectorDriver drv);
 
 /** Destroys a vector. */
-void sg_vector_del(struct SgVectorDriver drv, SgVector *vector);
+SG_EXTERN void sg_vector_del(struct SgVectorDriver drv, SgVector *vector);
 
 /** Gets the length of any vector created by this vector driver. */
-size_t sg_vector_len(struct SgVectorDriver drv);
+SG_EXTERN size_t sg_vector_len(struct SgVectorDriver drv);
 
 /** Perform a generic operation on some vectors.  See
     `#SgVectorDriverVt.operate`. */
-void sg_vector_operate(struct SgVectorDriver drv,
-                       SgVectorAccum *accum,
-                       SgVectorAccumType accum_type,
-                       SgVectorOperation *f,
-                       void *f_ctx,
-                       size_t offset,
-                       SgVector **vectors,
-                       size_t num_vectors);
+SG_EXTERN void sg_vector_operate(struct SgVectorDriver drv,
+                                 SgVectorAccum *accum,
+                                 SgVectorAccumType accum_type,
+                                 SgVectorOperation *f,
+                                 void *f_ctx,
+                                 size_t offset,
+                                 SgVector **vectors,
+                                 size_t num_vectors);
 
 /** Set every element of a vector to the same value. */
-void sg_vector_fill(struct SgVectorDriver drv,
-                    double value,
-                    SgVector *vector);
+SG_EXTERN void sg_vector_fill(struct SgVectorDriver drv,
+                              double value,
+                              SgVector *vector);
 
-extern SgVectorOperation sg_vector_fill_operation;
+SG_EXTERN extern SgVectorOperation sg_vector_fill_operation;
 
 /** Copy the contents of a vector. */
-void sg_vector_copy(struct SgVectorDriver drv,
-                    const SgVector *src,
-                    SgVector *dest);
+SG_EXTERN void sg_vector_copy(struct SgVectorDriver drv,
+                              const SgVector *src,
+                              SgVector *dest);
 
-extern SgVectorOperation sg_vector_copy_operation;
+SG_EXTERN extern SgVectorOperation sg_vector_copy_operation;
 
-void sg_vector_neg_assign(struct SgVectorDriver drv, SgVector *z);
+SG_EXTERN void sg_vector_neg_assign(struct SgVectorDriver drv, SgVector *z);
 
-extern SgVectorOperation sg_vector_neg_assign_operation;
+SG_EXTERN extern SgVectorOperation sg_vector_neg_assign_operation;
 
-void sg_vector_neg(struct SgVectorDriver drv, const SgVector *x, SgVector *z);
+SG_EXTERN void sg_vector_neg(struct SgVectorDriver drv,
+                             const SgVector *x,
+                             SgVector *z);
 
-extern SgVectorOperation sg_vector_neg_operation;
+SG_EXTERN extern SgVectorOperation sg_vector_neg_operation;
 
 /** In-place scalar multiplication of a vector. */
-void sg_vector_scale_assign(struct SgVectorDriver drv,
+SG_EXTERN void sg_vector_scale_assign(struct SgVectorDriver drv,
                             double alpha,
                             SgVector *z);
 
-extern SgVectorOperation sg_vector_scale_assign_operation;
+SG_EXTERN extern SgVectorOperation sg_vector_scale_assign_operation;
 
 /** Calculate scalar multiplication of a vector.
 
     The input vectors may completely overlap with the output vector.  Partial
     overlaps are not allowed.
- */
-void sg_vector_scale(struct SgVectorDriver drv,
-                     double alpha,
-                     const SgVector *x,
-                     SgVector *z);
+*/
+SG_EXTERN void sg_vector_scale(struct SgVectorDriver drv,
+                               double alpha,
+                               const SgVector *x,
+                               SgVector *z);
 
-extern SgVectorOperation sg_vector_scale_operation;
+SG_EXTERN extern SgVectorOperation sg_vector_scale_operation;
 
 /** Calculate `z ← α z + β y`.
 
     The input vector `y` may completely overlap with the output vector `z`.
     Partial overlaps are not allowed.
- */
-void sg_vector_linear_assign(struct SgVectorDriver drv,
-                             double alpha,
-                             double beta,
-                             const SgVector *y,
-                             SgVector *z);
+*/
+SG_EXTERN void sg_vector_linear_assign(struct SgVectorDriver drv,
+                                       double alpha,
+                                       double beta,
+                                       const SgVector *y,
+                                       SgVector *z);
 
-extern SgVectorOperation sg_vector_linear_assign_operation;
+SG_EXTERN extern SgVectorOperation sg_vector_linear_assign_operation;
 
 /** Calculate the linear combination of two vectors.
 
     Either or both input vectors may completely overlap with the output
     vector.  Partial overlaps are not allowed.
- */
-void sg_vector_linear(struct SgVectorDriver drv,
-                      double alpha,
-                      const SgVector *x,
-                      double beta,
-                      const SgVector *y,
-                      SgVector *z);
+*/
+SG_EXTERN void sg_vector_linear(struct SgVectorDriver drv,
+                                double alpha,
+                                const SgVector *x,
+                                double beta,
+                                const SgVector *y,
+                                SgVector *z);
 
-extern SgVectorOperation sg_vector_linear_operation;
+SG_EXTERN extern SgVectorOperation sg_vector_linear_operation;
 
 /** Sums the values of a vector. */
-double sg_vector_sum(struct SgVectorDriver drv, const SgVector *vector);
+SG_EXTERN double sg_vector_sum(struct SgVectorDriver drv,
+                               const SgVector *vector);
 
 /** The underlying operation used by `sg_vector_sum`. */
-extern SgVectorOperation sg_vector_sum_operation;
+SG_EXTERN extern SgVectorOperation sg_vector_sum_operation;
 
-struct SgBasicVectorDriver {
-    struct SgVectorDriverBase base;
-};
+SG_EXTERN extern struct SgVectorDriverVt SG_BASIC_VECTOR_DRIVER_VT;
 
-struct SgBasicVectorDriver sg_basic_vector_driver_new(size_t len);
+/** The simplest and most trivial driver for vectors.  This simply wraps over
+    a pointer to the length.  The length must not be deallocated while the
+    driver exists.
 
-struct SgVectorDriver sg_basic_vector_driver_get(struct SgBasicVectorDriver *);
-
-extern struct SgVectorDriverVt SG_BASIC_VECTOR_DRIVER_VT;
+    Allocation is done using `malloc` and `free`, and every `SgVector *`
+    stores just a `double *`.
+*/
+static inline struct SgVectorDriver sg_basic_vector_driver(size_t *len)
+{
+    struct SgVectorDriver drv = {len, &SG_BASIC_VECTOR_DRIVER_VT};
+    return drv;
+}
 
 #ifdef __cplusplus
 }
 #endif
+#include "restrict_end.h"
+#include "inline_end.h"
 #endif

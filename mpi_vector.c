@@ -46,10 +46,10 @@ struct SgMpiVectorDriver sg_mpi_vector_driver_new(MPI_Comm comm, size_t len)
         MPI_Abort(MPI_COMM_WORLD, e);
     }
 
-    d.base.len = (size_t)total_len;
+    d.base = (size_t)total_len;
     d.comm = comm;
     d.offset = (size_t)offset;
-    d.driver = sg_basic_vector_driver_new(len);
+    d.local_len = len;
     return d;
 }
 
@@ -59,17 +59,17 @@ struct SgVectorDriver sg_mpi_vector_driver_get(struct SgMpiVectorDriver *d)
     return drv;
 }
 
-static SgVector *vector_try_new(struct SgVectorDriverBase *self)
+static SgVector *vector_try_new(SgVectorDriverBase *self)
 {
     struct SgMpiVectorDriver *const inner = (struct SgMpiVectorDriver *)self;
-    struct SgVectorDriver drv = sg_basic_vector_driver_get(&inner->driver);
+    struct SgVectorDriver drv = sg_basic_vector_driver(&inner->local_len);
     return sg_vector_try_new(drv);
 }
 
-static void vector_del(struct SgVectorDriverBase *self, SgVector *vector)
+static void vector_del(SgVectorDriverBase *self, SgVector *vector)
 {
     struct SgMpiVectorDriver *const inner = (struct SgMpiVectorDriver *)self;
-    struct SgVectorDriver drv = sg_basic_vector_driver_get(&inner->driver);
+    struct SgVectorDriver drv = sg_basic_vector_driver(&inner->local_len);
     sg_vector_del(drv, vector);
 }
 
@@ -84,7 +84,7 @@ static void op_wrapper(void *invec, void *inoutvec,
     (*fptr)(fptr_ctx, inoutvec, invec, 0, NULL, 0);
 }
 
-static void vector_operate(struct SgVectorDriverBase *self,
+static void vector_operate(SgVectorDriverBase *self,
                            SgVectorAccum *accum,
                            SgVectorAccumType accum_type,
                            SgVectorOperation *f,
@@ -94,7 +94,7 @@ static void vector_operate(struct SgVectorDriverBase *self,
                            size_t num_vectors)
 {
     struct SgMpiVectorDriver *const inner = (struct SgMpiVectorDriver *)self;
-    struct SgVectorDriver drv = sg_basic_vector_driver_get(&inner->driver);
+    struct SgVectorDriver drv = sg_basic_vector_driver(&inner->local_len);
     int e, accum_len;
     MPI_Datatype datatype;
     MPI_Op op;

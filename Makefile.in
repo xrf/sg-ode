@@ -21,7 +21,7 @@ lint: {lint_targets}
 bin/ode_test.ok: bin/ode_test ode_demo.txt_out
 	@mkdir -p $(@D)
 	$(harness) bin/ode_test >ode_test.out
-	@git --no-pager diff --exit-code --no-index ode_test.out ode_demo.txt_out
+	@git --no-pager diff --exit-code --no-index $(GITDIFFFLAGS) ode_test.out ode_demo.txt_out
 	@touch $@
 
 bin/vector_test.ok: bin/vector_test
