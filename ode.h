@@ -18,28 +18,37 @@ typedef void SgDerivFn(void *f_ctx,
 
 struct SgOde {
     struct SgVectorDriver drv;
-    SgVector *yy, *wt, *p, *yp, *ypout, *phi[16];
+
+    /** Solution vector at `x` */
+    SgVector *yy;
+    /** Derivative of solution vector at `x` after successful step */
+    SgVector *yp;
+    /** Vector of weights for error criterion */
+    SgVector *wt;
+    SgVector *p, *ypout, *phi[16];
+
     double alpha[12], beta[12], sig[13], v[12], w[12], g[13], psi[12];
-    // Independent variable
+
+    /** Independent variable */
     double x;
-    // Appropriate step size for next step.  Normally determined by code
+    /** Appropriate step size for next step.  Normally determined by code */
     double h;
-    // Step size used for last successful step
+    /** Step size used for last successful step */
     double hold;
     double told, delsgn;
     unsigned ns;
-    // Appropriate order for next step (determined by code).
-    // Invariant: k >= 1 && k < 13
+    /** Appropriate order for next step (determined by code).
+        Invariant: k >= 1 && k < 13 */
     unsigned k;
-    // Order used for last successful step
+    /** Order used for last successful step */
     unsigned kold;
-    // "iflag_sign_old": whether the user-provided iflag was positive (controls
-    // whether the solver is allowed to overshoot and interpolate)
+    /** "iflag_sign_old": whether the user-provided iflag was positive
+        (controls whether solver is allowed to overshoot and interpolate) */
     bool isnold;
-    // probably means "no_round" and has something to do with rounding
+    /** probably means "no_round" and has something to do with rounding */
     bool nornd;
     bool phase1;
-    // set `true` for first step, `false` otherwise
+    /** `true` on first step, `false` otherwise */
     bool start;
 };
 
@@ -56,17 +65,10 @@ void sg_ode_del(struct SgOde *self);
   included to control roundoff error and to detect when the user is requesting
   too much accuracy.
 
-  @param y
-  Solution vector at `x` (length: `neqn`)
-
-  @param yp
-  Derivative of solution vector at `x` after successful step (length: `neqn`)
-
-  @param eps
-  Local error tolerance.  Must be variable (length: `1`)
-
-  @param wt
-  Vector of weights for error criterion (length: `neqn`)
+  @param[in,out] self   The solver state.
+  @param[in]     f      The derivative function.
+  @param[in,out] f_ctx  Arbitrary pointer for `f`.
+  @param[in,out] eps    Local error tolerance. (length: `1`)
 
   @return
   Nonzero when no step can be taken, zero otherwise (`crash`).

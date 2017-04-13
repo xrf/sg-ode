@@ -9,9 +9,12 @@ clean:
 
 check: bin/ode_test.ok bin/vector_test.ok
 
+doc:
+	doxygen
+
 lint: {lint_targets}
 
-.PHONY: all clean check lint Makefile
+.PHONY: all clean check doc lint Makefile
 
 {bins}
 
