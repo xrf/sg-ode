@@ -57,6 +57,12 @@ lints = {
             "MPICC": "OMPI_CC=$$(CC) MPICH_CC=$$(CC) $(MPICC)",
         },
     },
+    "dump_state": {
+        "targets": ["bin/ode_test_state.ok"],
+        "macros": {
+            "CPPFLAGS": "-DDUMP_STATE",
+        },
+    },
 }
 
 def bin_rule(b):

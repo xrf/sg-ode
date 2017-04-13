@@ -5,7 +5,7 @@ harness=$(HARNESS) timeout 15
 all: check
 
 clean:
-	rm -fr bin target *.o *.o_mpi *.ok
+	rm -fr bin target *.*_out *.o *.o_mpi *.ok
 
 check: bin/ode_test.ok bin/vector_test.ok
 
@@ -22,6 +22,13 @@ bin/ode_test.ok: bin/ode_test ode_demo.txt_out
 	@mkdir -p $(@D)
 	$(harness) bin/ode_test >ode_test.out
 	@git --no-pager diff --exit-code --no-index $(GITDIFFFLAGS) ode_test.out ode_demo.txt_out
+	@touch $@
+
+# this one is intended to be run in a separate tree by the linter
+bin/ode_test_state.ok: bin/ode_test ode_test_state.txt_out
+	@mkdir -p $(@D)
+	$(harness) bin/ode_test >ode_test.out
+	@git --no-pager diff --exit-code --no-index $(GITDIFFFLAGS) ode_test.out ode_test_state.txt_out
 	@touch $@
 
 bin/vector_test.ok: bin/vector_test

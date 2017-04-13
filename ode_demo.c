@@ -16,6 +16,7 @@
     in this case we use k² = 0.51.
 */
 #include <stdio.h>
+#include <string.h>
 #include "ode.h"
 
 void f(void *ctx, double t, const double *y_vec, double *yp_vec)
@@ -30,16 +31,42 @@ void f(void *ctx, double t, const double *y_vec, double *yp_vec)
     yp[2] = -ksq * y[0] * y[1];
 }
 
+#ifdef DUMP_STATE
+static void dump_state(size_t neqn, const double *work, const int *iwork)
+{
+    size_t i;
+    printf("iwork=[");
+    for (i = 0; i < 5; ++i) {
+        printf(" %5i", iwork[i]);
+    }
+    printf("] ");
+    printf("work=[");
+    for (i = 0; i < 21 * neqn + 100; ++i) {
+        printf(" %17.10e", work[i]);
+    }
+    printf("]\n");
+}
+#endif
+
 int main(void)
 {
     static const size_t neqn = 3;
     static const double relerr = 1.0e-9;
     static const double abserr = 1.0e-16;
+    size_t j;
     int iflag = 1;
     double t;
     int i;
     int iwork[5] = {0};
     double y[3], work[100 + 21 * 3];
+
+#ifdef DUMP_STATE
+    /* mark uninitialized values as NAN; this has the downside of preventing
+       the memory sanitizer from working*/
+    for (j = 0; j < 21 * neqn + 100; ++j) {
+        work[j] = NAN;
+    }
+#endif
 
     printf("neqn=%zu relerr=%g abserr=%g iflag=%i\n",
            neqn, relerr, abserr, iflag);
@@ -58,6 +85,9 @@ int main(void)
         double tout = 5.0 * i;
         int r;
         r = sg_ode(NULL, &f, neqn, y, &t, tout, relerr, abserr, 0, work, iwork);
+#ifdef DUMP_STATE
+        dump_state(neqn, work, iwork);
+#endif
         iflag = r == 0 ? 2 : iflag;
         dump();
     }

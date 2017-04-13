@@ -988,13 +988,6 @@ int sg_ode(void *f_ctx,
         return SG_ODE_EINVAL;
     }
 
-    /* clear the workspace at the beginning */
-    if (!resume) {
-        for (i = 0; i < work_len; ++i) {
-            work[i] = 0.0;
-        }
-    }
-
     self.drv = drv;
     self.yy = work + j;
     j += neqn;
