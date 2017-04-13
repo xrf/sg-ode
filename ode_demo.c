@@ -1,24 +1,20 @@
-// Demonstration program for ode/de/step package.
-//
-// reference:shampine and gordon's computer solution of
-// ordinary differential equations:the initial value problem.
-//
-// the package is used to solve the defining equations for the
-// jacobian elliptic functions:
-//
-//     y1' = y2*y3,      y1(0) = 0
-//     y2' = -y1*y3,     y2(0) = 1
-//     y3' = -ksq*y1*y2, y3(0) = 1
-//
-// which is solved for ti=i*5 for i=0, 1, ..., 12.
-// the analytic solution is
-//
-//     y1 = sn(t/ksq)
-//     y2 = cn(t/ksq)
-//     y3 = dn(t/ksq)
-//
-// in this case we use ksq=k*k=0.51.
+/** @file
+    Example program for the Shampine-Gordon ODE solver.
 
+    Solves the defining equations of Jacobian elliptic functions
+
+        y₀′ =     y₁ y₂    y₀(0) = 0
+        y₁′ =    -y₀ y₂    y₁(0) = 1
+        y₂′ = -k² y₀ y₁    y₂(0) = 1
+
+    for t[i] ∈ {0, 5, 10, 15, …, 60}.  The analytic solution is
+
+        y₀ = sn(t / k²)
+        y₁ = cn(t / k²)
+        y₂ = dn(t / k²)
+
+    in this case we use k² = 0.51.
+*/
 #include <stdio.h>
 #include "ode.h"
 
