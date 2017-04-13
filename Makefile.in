@@ -18,10 +18,10 @@ lint: {lint_targets}
 
 {bins}
 
-bin/ode_test.ok: bin/ode_test ode_demo.txt
+bin/ode_test.ok: bin/ode_test ode_demo.txt_out
 	@mkdir -p $(@D)
 	$(harness) bin/ode_test >ode_test.out
-	@git --no-pager diff --exit-code --no-index ode_test.out $(src)ode_demo.txt
+	@git --no-pager diff --exit-code --no-index ode_test.out ode_demo.txt_out
 	@touch $@
 
 bin/vector_test.ok: bin/vector_test
@@ -29,16 +29,22 @@ bin/vector_test.ok: bin/vector_test
 	$(harness) mpiexec -np 4 bin/vector_test
 	@touch $@
 
-vector_macros.h: vector_macros.py
-	$(src)./vector_macros.py
+vector_macros.h: vector_macros.py_out
+	./vector_macros.py_out
 
-.SUFFIXES: .c .o .o_mpi
+.SUFFIXES: .c .o .o_mpi .py .py_out .txt .txt_out
 
 .c.o:
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
 .c.o_mpi:
 	$(MPICC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
+
+.py.py_out:
+	cp -p $< $@
+
+.txt.txt_out:
+	cp -p $< $@
 
 Makefile:
 	@[ ! -x ./config.status ] || ./config.status

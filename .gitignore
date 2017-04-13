@@ -1,6 +1,7 @@
 bin/
 config.status
 Makefile
+*.*_out
 *.o_*
 *.ok
 *.out
