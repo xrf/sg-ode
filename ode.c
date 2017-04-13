@@ -18,7 +18,7 @@ typedef void (*fn_type)(void *f_ctx,
                         const SgVector *restrict y,
                         SgVector *restrict yp);
 
-static void vector_div_normsq_operation_inner(double *sum,
+static void vector_div_normsq_operation_inner(double *restrict sum,
                                               const double *restrict numer,
                                               const double *restrict denom,
                                               size_t num_elems)
@@ -30,11 +30,11 @@ static void vector_div_normsq_operation_inner(double *sum,
 }
 
 static void vector_div_normsq_operation(void *f_ctx,
-                                           SgVectorAccum *accum,
-                                           const SgVectorAccum *val,
-                                           size_t offset,
-                                           double **data,
-                                           size_t num_elems)
+                                        SgVectorAccum *accum,
+                                        const SgVectorAccum *val,
+                                        size_t offset,
+                                        double **data,
+                                        size_t num_elems)
 {
     double s = *(const double *)accum + *(const double *)val;
     (void)f_ctx;
@@ -46,8 +46,8 @@ static void vector_div_normsq_operation(void *f_ctx,
 }
 
 double vector_div_normsq(struct SgVectorDriver drv,
-                         const SgVector *numer,
-                         const SgVector *denom)
+                         const SgVector *restrict numer,
+                         const SgVector *restrict denom)
 {
     double accum = 0.0;
     SgVector *v[] = {(SgVector *)numer, (SgVector *)denom};
@@ -68,13 +68,279 @@ SG_DEFINE_VECTOR_MAP_4(static, vector_taup_operation, y, phi14, phi15, p, {
 
 void vector_taup(struct SgVectorDriver drv,
                  double h,
-                 const SgVector *y,
-                 const SgVector *phi14,
-                 const SgVector *phi15,
-                 SgVector *p)
+                 const SgVector *restrict y,
+                 const SgVector *restrict phi14,
+                 const SgVector *restrict phi15,
+                 SgVector *restrict p)
 {
     SgVector *v[] = {(SgVector *)y, (SgVector *)phi14, (SgVector *)phi15, p};
     sg_vector_operate(drv, NULL, 0, &vector_taup_operation, &h,
+                      0, v, sizeof(v) / sizeof(*v));
+}
+
+typedef void VectorErkOperation(double *restrict erk,
+                                double *restrict erkm1,
+                                double *restrict erkm2,
+                                const double *restrict wt,
+                                const double *restrict yp,
+                                const double *restrict phi0,
+                                const double *restrict phikm1,
+                                const double *restrict phikm2,
+                                size_t num_elems);
+
+static void vector_erk_operation_inner1(double *restrict erk,
+                                        double *restrict erkm1,
+                                        double *restrict erkm2,
+                                        const double *restrict wt,
+                                        const double *restrict yp,
+                                        const double *restrict phi0,
+                                        const double *restrict phikm1,
+                                        const double *restrict phikm2,
+                                        size_t num_elems)
+{
+    size_t i;
+    (void)erkm1;
+    (void)erkm2;
+    (void)phikm1;
+    (void)phikm2;
+    for (i = 0; i < num_elems; ++i) {
+        /* erk = ‖(𝐲′ - 𝛗[0]) / 𝛚‖² */
+        const double iwt = 1.0 / wt[i];
+        const double ypmphi = yp[i] - phi0[i];
+        *erk += pow(ypmphi * iwt, 2.0);
+    }
+}
+
+static void vector_erk_operation_inner2(double *restrict erk,
+                                        double *restrict erkm1,
+                                        double *restrict erkm2,
+                                        const double *restrict wt,
+                                        const double *restrict yp,
+                                        const double *restrict phi0,
+                                        const double *restrict phikm1,
+                                        const double *restrict phikm2,
+                                        size_t num_elems)
+{
+    size_t i;
+    (void)erkm2;
+    (void)phikm2;
+    for (i = 0; i < num_elems; ++i) {
+        /* erkm1 = ‖(𝛗[k - 1] + 𝐲′ - 𝛗[0]) / 𝛚‖²
+           erk = ‖(𝐲′ - 𝛗[0]) / 𝛚‖² */
+        const double iwt = 1.0 / wt[i];
+        const double ypmphi = yp[i] - phi0[i];
+        *erkm1 += pow((phikm1[i] + ypmphi) * iwt, 2.0);
+        *erk += pow(ypmphi * iwt, 2.0);
+    }
+}
+
+static void vector_erk_operation_inner3(double *restrict erk,
+                                        double *restrict erkm1,
+                                        double *restrict erkm2,
+                                        const double *restrict wt,
+                                        const double *restrict yp,
+                                        const double *restrict phi0,
+                                        const double *restrict phikm1,
+                                        const double *restrict phikm2,
+                                        size_t num_elems)
+{
+    size_t i;
+    for (i = 0; i < num_elems; ++i) {
+        /* erkm2 = ‖(𝛗[k - 2] + 𝐲′ - 𝛗[0]) / 𝛚‖²
+           erkm1 = ‖(𝛗[k - 1] + 𝐲′ - 𝛗[0]) / 𝛚‖²
+           erk = ‖(𝐲′ - 𝛗[0]) / 𝛚‖² */
+        const double iwt = 1.0 / wt[i];
+        const double ypmphi = yp[i] - phi0[i];
+        *erkm2 += pow((phikm2[i] + ypmphi) * iwt, 2.0);
+        *erkm1 += pow((phikm1[i] + ypmphi) * iwt, 2.0);
+        *erk += pow(ypmphi * iwt, 2.0);
+    }
+}
+
+static void vector_erk_operation(void *ctx,
+                                 SgVectorAccum *vaccum,
+                                 const SgVectorAccum *vval,
+                                 size_t offset,
+                                 double **data,
+                                 size_t num_elems)
+{
+    VectorErkOperation *inner = *(VectorErkOperation *const *)ctx;
+    double *accum = (double *)vaccum;
+    const double *val = (double *)vval;
+    double erk = accum[0] + val[0];
+    double erkm1 = accum[1] + val[1];
+    double erkm2 = accum[2] + val[2];
+    (void)offset;
+    if (num_elems) {
+        (*inner)(&erk, &erkm1, &erkm2,
+                 data[0], data[1], data[2], data[3], data[4], num_elems);
+    }
+    accum[0] = erk;
+    accum[1] = erkm1;
+    accum[2] = erkm2;
+}
+
+void vector_erk(struct SgVectorDriver drv,
+                unsigned k,
+                const SgVector *restrict wt,
+                const SgVector *restrict yp,
+                SgVector *const restrict *phi,
+                double *restrict erk,
+                double *restrict erkm1,
+                double *restrict erkm2)
+{
+    double accum[3] = {0.0, 0.0, 0.0};
+    SgVector *v[] = {
+        (SgVector *)wt,
+        (SgVector *)yp,
+        (SgVector *)phi[0],
+        NULL,
+        NULL,
+    };
+    VectorErkOperation *ctx;
+    if (k > 2) {
+        ctx = &vector_erk_operation_inner3;
+        v[3] = (SgVector *)phi[k - 1];
+        v[4] = (SgVector *)phi[k - 2];
+    } else if (k >= 2) {
+        ctx = &vector_erk_operation_inner2;
+        v[3] = (SgVector *)phi[k - 1];
+    } else {
+        ctx = &vector_erk_operation_inner1;
+    }
+    sg_vector_operate(drv, accum, -3,
+                      &vector_erk_operation, &ctx,
+                      0, v, sizeof(v) / sizeof(*v));
+    *erk = accum[0];
+    *erkm1 = accum[1];
+    *erkm2 = accum[2];
+}
+
+SG_DEFINE_VECTOR_MAP_2(static, vector_ibeta_diff_operation, phiip1, phii, {
+        const double ibetai = *(const double *)ctx;
+        /* 𝛗[i] ← β[i]⁻¹ (𝛗[i] - 𝛗[i + 1]) */
+        *phii = ibetai * (*phii - *phiip1);
+    })
+
+void vector_ibeta_diff(struct SgVectorDriver drv,
+                       double ibetai,
+                       const SgVector *restrict phiip1,
+                       SgVector *restrict phii)
+{
+    SgVector *v[] = {(SgVector *)phiip1, phii};
+    sg_vector_operate(drv, NULL, 0, &vector_ibeta_diff_operation, &ibetai,
+                      0, v, sizeof(v) / sizeof(*v));
+}
+
+SG_DEFINE_VECTOR_MAP_6(
+    static, vector_rhop_operation,
+    yp, phi0, phi15, p, y, phi14, {
+        /* 𝛒 = h g[k] (𝐲′ - 𝛗[0]) - 𝛗[15]
+           𝐲 ← 𝐩 + 𝛒
+           𝛗[14] ← (𝐲 - 𝐩) - 𝛒 */
+        const double hgk = *(const double *)ctx;
+        const double rho = hgk * (*yp - *phi0) - *phi15;
+        *y = *p + rho;
+        *phi14 = (*y - *p) - rho;
+    })
+
+void vector_rhop(struct SgVectorDriver drv,
+                 double hgk,
+                 const SgVector *restrict yp,
+                 const SgVector *restrict phi0,
+                 const SgVector *restrict phi15,
+                 const SgVector *restrict p,
+                 SgVector *restrict y,
+                 SgVector *restrict phi14)
+{
+    SgVector *v[] = {
+        (SgVector *)yp,
+        (SgVector *)phi0,
+        (SgVector *)phi15,
+        (SgVector *)p,
+        y,
+        phi14
+    };
+    sg_vector_operate(drv, NULL, 0, &vector_rhop_operation, &hgk,
+                      0, v, sizeof(v) / sizeof(*v));
+}
+
+SG_DEFINE_VECTOR_MAP_4(static, vector_eval_y_operation, p, yp, phi0, y, {
+        /* 𝐲 ← 𝐩 + h g[k] (𝐲′ - 𝛗[0]) */
+        const double hgk = *(const double *)ctx;
+        *y = *p + hgk * (*yp - *phi0);
+    })
+
+void vector_eval_y(struct SgVectorDriver drv,
+                   const SgVector *restrict p,
+                   double hgk,
+                   const SgVector *restrict yp,
+                   const SgVector *restrict phi0,
+                   SgVector *restrict y)
+{
+    SgVector *v[] = {(SgVector *)p, (SgVector *)yp, (SgVector *)phi0, y};
+    sg_vector_operate(drv, NULL, 0, &vector_eval_y_operation, &hgk,
+                      0, v, sizeof(v) / sizeof(*v));
+}
+
+SG_DEFINE_VECTOR_MAP_4(
+    static, vector_upd_diffs_operation,
+    yp, phi0, phik, phikp1, {
+        /* 𝛗[k] ← 𝐲′ - 𝛗[0]
+           𝛗[k + 1] ← 𝛗[k] - 𝛗[k + 1] */
+        *phik = *yp - *phi0;
+        *phikp1 = *phik - *phikp1;
+    })
+
+void vector_upd_diffs(struct SgVectorDriver drv,
+                      const SgVector *restrict yp,
+                      const SgVector *restrict phi0,
+                      SgVector *restrict phik,
+                      SgVector *restrict phikp1)
+{
+    SgVector *v[] = {(SgVector *)yp, (SgVector *)phi0, phik, phikp1};
+    sg_vector_operate(drv, NULL, 0, &vector_upd_diffs_operation, NULL,
+                      0, v, sizeof(v) / sizeof(*v));
+}
+
+SG_DEFINE_VECTOR_MAP_3(static, vector_intrp_yout_operation, phii, yout, ypout, {
+        /* 𝐲° ← 𝐲° + g[i] 𝛗[i]
+           𝐲°′ ← 𝐲°′ + ρ[i] 𝛗[i] */
+        const double gi = ((const double *)ctx)[0];
+        const double rhoi = ((const double *)ctx)[1];
+        *yout += gi * *phii;
+        *ypout += rhoi * *phii;
+    })
+
+void vector_intrp_yout(struct SgVectorDriver drv,
+                       double gi,
+                       double rhoi,
+                       const SgVector *restrict phii,
+                       SgVector *restrict yout,
+                       SgVector *restrict ypout)
+{
+    double ctx[] = {gi, rhoi};
+    SgVector *v[] = {(SgVector *)phii, yout, ypout};
+    sg_vector_operate(drv, NULL, 0, &vector_intrp_yout_operation, &ctx,
+                      0, v, sizeof(v) / sizeof(*v));
+}
+
+SG_DEFINE_VECTOR_MAP_2(static, vector_update_wt_operation, yy, wt, {
+        /* 𝛚 ← releps |𝐘| + abseps */
+        const double releps = ((const double *)ctx)[0];
+        const double abseps = ((const double *)ctx)[1];
+        *wt = releps * fabs(*yy) + abseps;
+    })
+
+void vector_update_wt(struct SgVectorDriver drv,
+                      double releps,
+                      const SgVector *restrict yy,
+                      double abseps,
+                      SgVector *restrict wt)
+{
+    double ctx[] = {releps, abseps};
+    SgVector *v[] = {(SgVector *)yy, wt};
+    sg_vector_operate(drv, NULL, 0, &vector_update_wt_operation, &ctx,
                       0, v, sizeof(v) / sizeof(*v));
 }
 
@@ -218,7 +484,6 @@ int step(double *const restrict y,
         0.00936, 0.00789, 0.00679, 0.00592, 0.00524, 0.00468
     };
 
-    const size_t neqn = sg_vector_len(self->drv);
     const double p5eps = *eps * 0.5;
     bool *const start = &self->start;
     bool *const phase1 = &self->phase1;
@@ -237,7 +502,6 @@ int step(double *const restrict y,
     double *const w = self->w;
     double *const g = self->g;
 
-    size_t l;
     unsigned knew;
     unsigned i, iq, j;
     int ifail;
@@ -402,23 +666,11 @@ int step(double *const restrict y,
             (*f)(f_ctx, *x, p, yp);
 
             /* estimate errors at orders k, k-1, k-2 */
-            erkm2 = 0.0;
-            erkm1 = 0.0;
-            erk = 0.0;
             /* erkm2 = ‖(𝛗[k - 2] + 𝐲′ - 𝛗[0]) / 𝛚‖²
                erkm1 = ‖(𝛗[k - 1] + 𝐲′ - 𝛗[0]) / 𝛚‖²
                erk = ‖(𝐲′ - 𝛗[0]) / 𝛚‖² */
-            for (l = 0; l < neqn; ++l) {
-                const double iwt = 1.0 / wt[l];
-                const double ypmphi = yp[l] - phi[0][l];
-                if (*k > 2) {
-                    erkm2 += pow((phi[*k - 2][l] + ypmphi) * iwt, 2.0);
-                }
-                if (*k >= 2) {
-                    erkm1 += pow((phi[*k - 1][l] + ypmphi) * iwt, 2.0);
-                }
-                erk += pow(ypmphi * iwt, 2.0);
-            }
+            // TODO: remove cast
+            vector_erk(drv, *k, wt, yp, (SgVector *const *)phi, &erk, &erkm1, &erkm2);
             if (*k > 2) {
                 erkm2 = absh * sig[*k - 2] * gstr[*k - 3] * sqrt(erkm2);
             }
@@ -459,10 +711,7 @@ int step(double *const restrict y,
             *x = xold;
         }
         for (i = 0; i < *k; ++i) {
-            /* 𝛗[i] ← β[i]⁻¹ (𝛗[i] - 𝛗[i + 1]) */
-            for (l = 0; l < neqn; ++l) {
-                phi[i][l] = (1.0 / beta[i]) * (phi[i][l] - phi[i + 1][l]);
-            }
+            vector_ibeta_diff(drv, 1.0 / beta[i], phi[i + 1], phi[i]);
         }
         for (i = 1; i < *k; ++i) {
             psi[i - 1] = psi[i] - *h;
@@ -500,19 +749,9 @@ int step(double *const restrict y,
     {
         const double hgk = *h * g[*k];
         if (!*nornd) {
-            /* 𝛒 = h g[k] (𝐲′ - 𝛗[0]) - 𝛗[15]
-               𝐲 ← 𝐩 + 𝛒
-               𝛗[14] ← (𝐲 - 𝐩) - 𝛒 */
-            for (l = 0; l < neqn; ++l) {
-                const double rho = hgk * (yp[l] - phi[0][l]) - phi[15][l];
-                y[l] = p[l] + rho;
-                phi[14][l] = (y[l] - p[l]) - rho;
-            }
+            vector_rhop(drv, hgk, yp, phi[0], phi[15], p, y, phi[14]);
         } else {
-            /* 𝐲 ← 𝐩 + h g[k] (𝐲′ - 𝛗[0]) */
-            for (l = 0; l < neqn; ++l) {
-                y[l] = p[l] + hgk * (yp[l] - phi[0][l]);
-            }
+            vector_eval_y(drv, p, hgk, yp, phi[0], y);
         }
     }
     (*f)(f_ctx, *x, y, yp);
@@ -520,10 +759,7 @@ int step(double *const restrict y,
     /* update differences for next step */
     /* 𝛗[k] ← 𝐲′ - 𝛗[0]
        𝛗[k + 1] ← 𝛗[k] - 𝛗[k + 1] */
-    for (l = 0; l < neqn; ++l) {
-        phi[*k][l] = yp[l] - phi[0][l];
-        phi[*k + 1][l] = phi[*k][l] - phi[*k + 1][l];
-    }
+    vector_upd_diffs(drv, yp, phi[0], phi[*k], phi[*k + 1]);
     /* ∀ i ∈ [0, k).  𝛗[i] ← 𝛗[i] + 𝛗[k] */
     for (i = 0; i < *k; ++i) {
         sg_vector_linear_assign(drv, 1.0, 1.0, phi[*k], phi[i]);
@@ -612,11 +848,9 @@ void intrp(const struct SgVectorDriver drv,
            double *const restrict *const phi,
            const double *const restrict psi)
 {
-    const size_t neqn = sg_vector_len(drv);
     const double hi = xout - x;
     const unsigned ki = (unsigned)(kold + 1);
 
-    size_t l;
     unsigned i, j;
     double term = 0.0;
     double g[13] = {1.0};
@@ -653,12 +887,7 @@ void intrp(const struct SgVectorDriver drv,
     sg_vector_fill(drv, 0.0, ypout);
     sg_vector_fill(drv, 0.0, yout);
     for (i = ki; i-- > 0;) {
-        const double gi = g[i];
-        const double rhoi = rho[i];
-        for (l = 0; l < neqn; ++l) {
-            yout[l] += gi * phi[i][l];
-            ypout[l] += rhoi * phi[i][l];
-        }
+        vector_intrp_yout(drv, g[i], rho[i], phi[i], yout, ypout);
     }
     /* 𝐲° ← 𝐲 + hi 𝐲° */
     sg_vector_linear_assign(drv, hi, 1.0, y, yout);
@@ -694,7 +923,6 @@ void de(struct Ode *const self,
     double abseps, eps, releps;
     int kle4;
     unsigned nostep;
-    size_t l;
 
     /* test for improper parameters */
     eps = max(*relerr, *abserr);
@@ -772,9 +1000,7 @@ void de(struct Ode *const self,
         /* limit step size, set weight vector and take a step */
         self->h = copysign(min(fabs(self->h), fabs(tend - self->x)), self->h);
         /* 𝛚 ← releps |𝐘| + abseps */
-        for (l = 0; l < neqn; ++l) {
-            self->wt[l] = releps * fabs(self->yy[l]) + abseps;
-        }
+        vector_update_wt(drv, releps, self->yy, abseps, self->wt);
 
         /* test for tolerances too small */
         if (step(self->yy, f, f_ctx, &eps, self->wt,
@@ -928,7 +1154,6 @@ void de(struct Ode *const self,
 void ode(struct Ode *const self,
          const fn_type f,
          void *const restrict f_ctx,
-         const struct SgVectorDriver drv,
          SgVector *const restrict y,
          double *const restrict t,
          const double tout,
@@ -937,7 +1162,6 @@ void ode(struct Ode *const self,
          const unsigned maxnum,
          int *const restrict iflag)
 {
-    (void)drv; // TODO: remove this?
     de(self, f, f_ctx, y, t, tout, relerr, abserr, maxnum, iflag);
 }
 

@@ -68,7 +68,7 @@ int main(void)
     for (i = 1; i <= 12; ++i) {
         tout = 5.0 * i;
     retry:
-        ode(&solver, f, NULL, drv, y_vec, &t, tout,
+        ode(&solver, f, NULL, y_vec, &t, tout,
             &relerr, &abserr, maxnum, &iflag);
         dump();
         switch (iflag) {
