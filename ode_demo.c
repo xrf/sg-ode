@@ -41,7 +41,7 @@ int main(void)
     static const size_t neqn = 3;
     double t, tout;
     int i;
-    struct Ode solver;
+    struct SgOde solver;
     double relerr = 1.0e-9;
     double abserr = 1.0e-16;
     int iflag = 1;
@@ -50,7 +50,7 @@ int main(void)
     SgVector *y_vec = sg_vector_new(drv);
     double *y = (double *)y_vec;
 
-    ode_init(&solver, drv);
+    sg_ode_init(&solver, drv);
 
     printf("neqn=%zu relerr=%g abserr=%g iflag=%i\n",
            neqn, relerr, abserr, iflag);
@@ -68,8 +68,8 @@ int main(void)
     for (i = 1; i <= 12; ++i) {
         tout = 5.0 * i;
     retry:
-        ode(&solver, f, NULL, y_vec, &t, tout,
-            &relerr, &abserr, maxnum, &iflag);
+        sg_ode_de(&solver, f, NULL, y_vec, &t, tout,
+                  &relerr, &abserr, maxnum, &iflag);
         dump();
         switch (iflag) {
         case 1:
@@ -93,7 +93,7 @@ int main(void)
             return 1;
         }
     }
-    ode_del(&solver);
+    sg_ode_del(&solver);
     sg_vector_del(drv, y_vec);
     return 0;
 }
