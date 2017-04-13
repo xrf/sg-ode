@@ -13,6 +13,52 @@ bins = [
     },
 ]
 
+# list of all patterns for source files
+# (used for vpath builds)
+vpath_patterns = ["%.c", "%.h", "%.py", "%.txt"]
+
+# Notes
+#
+#   - All sanitizers are run in subdirectories of 'target' to avoid polluting
+#     the main tree.
+#   - If the sanitizer fails to mmap, it's probably due to ulimit.
+#   - Address and memory sanitizers require all external libraries to be
+#     recompiled, so we're avoid sanitizing any tests that require MPI.
+#
+lints = {
+    "gcc_valgrind": {
+        "targets": ["check"],
+        "macros": {
+            "CC": "gcc",
+            "CFLAGS": "$(CFLAGS) -O3",
+            "HARNESS": "valgrind --error-exitcode=1 -q",
+            "MPICC": "OMPI_CC=$$(CC) MPICH_CC=$$(CC) $(MPICC)",
+        },
+    },
+    "clang_asan": {
+        "targets": ["bin/ode_test.ok"],
+        "macros": {
+            "CC": "clang",
+            "CFLAGS": "$(CFLAGS) -fsanitize=address",
+        },
+    },
+    "clang_msan": {
+        "targets": ["bin/ode_test.ok"],
+        "macros": {
+            "CC": "clang",
+            "CFLAGS": "$(CFLAGS) -fsanitize=memory",
+        },
+    },
+    "clang_ubsan": {
+        "targets": ["check"],
+        "macros": {
+            "CC": "clang",
+            "CFLAGS": "$(CFLAGS) -fsanitize=undefined",
+            "MPICC": "OMPI_CC=$$(CC) MPICH_CC=$$(CC) $(MPICC)",
+        },
+    },
+}
+
 def bin_rule(b):
     return """
 {name}: {deps}
@@ -21,6 +67,30 @@ def bin_rule(b):
 """[1:].format(name=b["name"],
                deps=" ".join(b["deps"]),
                cc=b.get("cc", "CC"))
+
+def lint_target(target):
+    return "target/{target}/.ok".format(target=target)
+
+def lint_rule(target, lint, vpath_patterns):
+    # requires GNU Make;
+    # use vpath instead of VPATH to avoid interference from non-VPATH builds
+    vpaths = "\n".join(
+        "\t@echo 'vpath {pattern} $$(src)' >>$(@D)/Makefile"
+        .format(target=target, pattern=pattern)
+        for pattern in sorted(vpath_patterns))
+    return """
+{lint_target}:
+	@mkdir -p $(@D)
+	@echo 'src=../../' >$(@D)/Makefile
+{vpaths}
+	@echo '_all: {targets}' >>$(@D)/Makefile
+	@echo 'include $$(src)Makefile' >>$(@D)/Makefile
+	$(MAKE) -C $(@D) {macros}
+"""[1:].format(lint_target=lint_target(target),
+               vpaths=vpaths,
+               targets=" ".join(sorted(lint["targets"])),
+               macros=" ".join("{}='{}'".format(k, v)
+                               for k, v in sorted(lint["macros"].items())))
 
 def get_deps(objs):
     deps = set()
@@ -44,9 +114,12 @@ macros = {
 }
 
 subst = {
-    "macros": "".join("{}={}\n".format(k, v) for k, v in macros.items()),
+    "macros": "\n".join("{}={}".format(k, v) for k, v in macros.items()),
     "bins": "\n".join(bin_rule(b) for b in bins).rstrip("\n"),
     "deps": get_deps(objs),
+    "lints": "\n".join(lint_rule(k, v, vpath_patterns)
+                       for k, v in sorted(lints.items())),
+    "lint_targets": " ".join(lint_target(k) for k in sorted(lints)),
 }
 
 with open("Makefile.in") as f:

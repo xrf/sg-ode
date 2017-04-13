@@ -945,20 +945,13 @@ void ode_init(struct Ode *self, struct SgVectorDriver drv)
 {
     size_t i;
     self->drv = drv;
-    // TODO: which ones actually NEED to be init'ed
     self->yy = sg_vector_new(self->drv);
-    sg_vector_fill(self->drv, 0.0, self->yy);
     self->wt = sg_vector_new(self->drv);
-    sg_vector_fill(self->drv, 0.0, self->wt);
     self->p = sg_vector_new(self->drv);
-    sg_vector_fill(self->drv, 0.0, self->p);
     self->yp = sg_vector_new(self->drv);
-    sg_vector_fill(self->drv, 0.0, self->yp);
     self->ypout = sg_vector_new(self->drv);
-    sg_vector_fill(self->drv, 0.0, self->ypout);
     for (i = 0; i < sizeof(self->phi) / sizeof(*self->phi); ++i) {
         self->phi[i] = sg_vector_new(self->drv);
-//        sg_vector_fill(self->drv, 0.0, self->phi[i]);
     }
 }
 
