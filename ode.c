@@ -56,6 +56,28 @@ double vector_div_normsq(struct SgVectorDriver drv,
     return accum;
 }
 
+SG_DEFINE_VECTOR_MAP_4(static, vector_taup_operation, y, phi14, phi15, p, {
+        /* 𝛕 = h 𝐩 - 𝛗[14]
+           𝐩 ← 𝐲 + 𝛕
+           𝛗[15] ← (𝐩 - 𝐲) - 𝛕 */
+        const double h = *(const double *)ctx;
+        const double tau = h * *p - *phi14;
+        *p = *y + tau;
+        *phi15 = (*p - *y) - tau;
+    })
+
+void vector_taup(struct SgVectorDriver drv,
+                 double h,
+                 const SgVector *y,
+                 const SgVector *phi14,
+                 const SgVector *phi15,
+                 SgVector *p)
+{
+    SgVector *v[] = {(SgVector *)y, (SgVector *)phi14, (SgVector *)phi15, p};
+    sg_vector_operate(drv, NULL, 0, &vector_taup_operation, &h,
+                      0, v, sizeof(v) / sizeof(*v));
+}
+
 /*
   Integrates a system of first order ordinary differential equations one step,
   normally from `x` to `x+h`, using a modified divided difference form of the
@@ -367,14 +389,8 @@ int step(double *const restrict y,
             sg_vector_linear_assign(drv, 1.0, 1.0, phi[i + 1], phi[i]);
         }
         if (!*nornd) {
-            /* 𝛕 = h 𝐩 - 𝛗[14]
-               𝐩 ← 𝐲 + 𝛕
-               𝛗[15] ← (𝐩 - 𝐲) - 𝛕 */
-            for (l = 0; l < neqn; ++l) {
-                const double tau = *h * p[l] - phi[14][l];
-                p[l] = y[l] + tau;
-                phi[15][l] = (p[l] - y[l]) - tau;
-            }
+            /* 𝐩 ← 𝛕′(h, 𝐲, 𝛗[14], 𝛗[15], 𝐩) */
+            vector_taup(drv, *h, y, phi[14], phi[15], p);
         } else {
             /* 𝐩 ← 𝐲 + h 𝐩 */
             sg_vector_linear_assign(drv, *h, 1.0, y, p);
