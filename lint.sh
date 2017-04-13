@@ -9,7 +9,7 @@ jobs=4
 #   - If the linting fails, you should probably make clean before doing
 #     anything else.
 #
-cflags="-g -O2 -std=c99 -Wall -Wconversion -Wextra -pedantic"
+cflags="-g -O2 -std=c11 -Wall -Wconversion -Wextra -pedantic"
 make -j "${jobs}" clean
 make -j "${jobs}" CC=gcc CFLAGS="$cflags -O3" HARNESS="valgrind --error-exitcode=1 -q" check
 make -j "${jobs}" clean

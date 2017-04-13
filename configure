@@ -40,7 +40,7 @@ objs = itertools.chain(*(b["deps"] for b in bins))
 
 macros = {
     "MPICC": "mpicc",
-    "CFLAGS": "-g -O2 -std=c99 -Wall -Wconversion -Wextra -pedantic",
+    "CFLAGS": "-g -O2 -std=c11 -Wall -Wconversion -Wextra -pedantic",
 }
 
 subst = {

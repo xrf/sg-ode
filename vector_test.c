@@ -7,7 +7,7 @@
 #include "vector_macros.h"
 
 /* Initialize the vectors with the numbers 0.0, 1.0, 2.0, … */
-SG_DEFINE_VECTOR_MAP_1(static, init_f, v, { *v = index; })
+SG_DEFINE_VECTOR_MAP_1(static, init_f, v, { *v = (double)index; })
 
 #define N 42
 
