@@ -930,6 +930,58 @@ static void wrapper(void *ctx,
     (*mctx->f)(mctx->ctx, t, (const double *)y, (double *)yp);
 }
 
+static void pack_state(const struct SgOde *restrict self,
+                       double *restrict work,
+                       int *restrict iwork)
+{
+    iwork[0] = (int)self->ns;
+    iwork[1] = self->nornd ? 1 : -1;
+    iwork[2] = (int)self->k;
+    iwork[3] = (int)self->kold;
+    iwork[4] = self->isnold;
+
+    memcpy(&work[0], &self->alpha, sizeof(self->alpha));
+    memcpy(&work[12], &self->beta, sizeof(self->beta));
+    memcpy(&work[24], &self->sig, sizeof(self->sig));
+    memcpy(&work[37], &self->v, sizeof(self->v));
+    memcpy(&work[49], &self->w, sizeof(self->w));
+    memcpy(&work[61], &self->g, sizeof(self->g));
+    work[74] = self->phase1 ? 1.0 : -1.0;
+    memcpy(&work[75], &self->psi, sizeof(self->psi));
+    work[87] = self->x;
+    work[88] = self->h;
+    work[89] = self->hold;
+    work[90] = self->start ? 1.0 : -1.0;
+    work[91] = self->told;
+    work[92] = self->delsgn;
+}
+
+static void unpack_state(const double *restrict work,
+                         const int *restrict iwork,
+                         struct SgOde *restrict self)
+{
+    memcpy(&self->alpha, &work[0], sizeof(self->alpha));
+    memcpy(&self->beta, &work[12], sizeof(self->beta));
+    memcpy(&self->sig, &work[24], sizeof(self->sig));
+    memcpy(&self->v, &work[37], sizeof(self->v));
+    memcpy(&self->w, &work[49], sizeof(self->w));
+    memcpy(&self->g, &work[61], sizeof(self->g));
+    self->phase1 = work[74] > 0.0;
+    memcpy(&self->psi, &work[75], sizeof(self->psi));
+    self->x = work[87];
+    self->h = work[88];
+    self->hold = work[89];
+    self->start = work[90] > 0.0;
+    self->told = work[91];
+    self->delsgn = work[92];
+
+    self->ns = (unsigned)iwork[0];
+    self->nornd = iwork[1] != -1;
+    self->k = (unsigned)iwork[2];
+    self->kold = (unsigned)iwork[3];
+    self->isnold = iwork[4];
+}
+
 int sg_ode(void *f_ctx,
            SimpleDerivFn *f,
            size_t neqn,
@@ -940,7 +992,7 @@ int sg_ode(void *f_ctx,
            double abserr,
            int flag,
            double *restrict work,
-           int *iwork)
+           int *restrict iwork)
 {
     struct SgVectorDriverVt vt = {
         &vector_try_new,
@@ -1005,51 +1057,12 @@ int sg_ode(void *f_ctx,
     }
 
     if (resume) {
-        memcpy(&self.alpha, &work[0], sizeof(self.alpha));
-        memcpy(&self.beta, &work[12], sizeof(self.beta));
-        memcpy(&self.sig, &work[24], sizeof(self.sig));
-        memcpy(&self.v, &work[37], sizeof(self.v));
-        memcpy(&self.w, &work[49], sizeof(self.w));
-        memcpy(&self.g, &work[61], sizeof(self.g));
-        memcpy(&self.psi, &work[75], sizeof(self.psi));
-        self.x = work[87];
-        self.h = work[88];
-        self.hold = work[89];
-        self.told = work[91];
-        self.delsgn = work[92];
-
-        self.ns = (unsigned)iwork[0];
-        self.k = (unsigned)iwork[2];
-        self.kold = (unsigned)iwork[3];
-        self.isnold = iwork[4];
-
-        self.start = work[90] > 0.0;
-        self.phase1 = work[74] > 0.0;
-        self.nornd = iwork[1] != -1;
+        unpack_state(work, iwork, &self);
     }
 
     sg_ode_de(&self, wrapper, &ctx, y, t, tout, &relerr, &abserr, 500, &iflag);
 
-    iwork[0] = (int)self.ns;
-    iwork[1] = self.nornd ? 1 : -1;
-    iwork[2] = (int)self.k;
-    iwork[3] = (int)self.kold;
-    iwork[4] = self.isnold;
-
-    memcpy(&work[0], &self.alpha, sizeof(self.alpha));
-    memcpy(&work[12], &self.beta, sizeof(self.beta));
-    memcpy(&work[24], &self.sig, sizeof(self.sig));
-    memcpy(&work[37], &self.v, sizeof(self.v));
-    memcpy(&work[49], &self.w, sizeof(self.w));
-    memcpy(&work[61], &self.g, sizeof(self.g));
-    work[74] = self.phase1 ? 1.0 : -1.0;
-    memcpy(&work[75], &self.psi, sizeof(self.psi));
-    work[87] = self.x;
-    work[88] = self.h;
-    work[89] = self.hold;
-    work[90] = self.start ? 1.0 : -1.0;
-    work[91] = self.told;
-    work[92] = self.delsgn;
+    pack_state(&self, work, iwork);
 
     /* 'ode' returns a signed flag depending on whether FSTRICT is enabled;
        we don't want that */

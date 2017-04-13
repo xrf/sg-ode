@@ -408,7 +408,7 @@ SG_EXTERN int sg_ode(void *f_ctx,
                      double abserr,
                      int flag,
                      double *restrict work,
-                     int *iwork);
+                     int *restrict iwork);
 
 #ifdef __cplusplus
 }

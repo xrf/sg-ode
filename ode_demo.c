@@ -53,7 +53,6 @@ int main(void)
     static const size_t neqn = 3;
     static const double relerr = 1.0e-9;
     static const double abserr = 1.0e-16;
-    size_t j;
     int iflag = 1;
     double t;
     int i;
@@ -61,6 +60,7 @@ int main(void)
     double y[3], work[100 + 21 * 3];
 
 #ifdef DUMP_STATE
+    size_t j;
     /* mark uninitialized values as NAN; this has the downside of preventing
        the memory sanitizer from working*/
     for (j = 0; j < 21 * neqn + 100; ++j) {
