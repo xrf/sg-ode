@@ -5,6 +5,7 @@
 #include "utils.h"
 #include "vector_macros.h"
 #include "vector.h"
+#include "restrict_begin.h"
 
 SgVector *sg_vector_try_new(struct SgVectorDriver drv)
 {
@@ -65,9 +66,9 @@ void sg_vector_fill_operation(void *f_ctx,
         size_t i;
         double *v = data[0];
         if (c == 0.0) {
-            // compilers should be able to optimize this to a simple memset
-            // (can't use a real memset because C standard doesn't guarantee
-            // that would work)
+            /* compilers should be able to optimize this to a simple memset
+               (can't use a real memset because C standard doesn't guarantee
+               that would work) */
             for (i = 0; i < num_elems; ++i) {
                 v[i] = 0.0;
             }
@@ -83,12 +84,14 @@ void sg_vector_copy(struct SgVectorDriver drv,
                     const SgVector *src,
                     SgVector *dest)
 {
-    SgVector *v[] = {(SgVector *)src, dest};
+    SgVector *v[2];
+    v[0] = (SgVector *)src;
+    v[1] = dest;
     sg_vector_operate(drv, NULL, 0, &sg_vector_copy_operation, NULL,
                       0, v, sizeof(v) / sizeof(*v));
 }
 
-SG_DEFINE_VECTOR_MAP_2(, sg_vector_copy_operation, src, dest, {
+SG_DEFINE_VECTOR_MAP_2(extern, sg_vector_copy_operation, src, dest, {
         *dest = *src;
     })
 
@@ -99,19 +102,21 @@ void sg_vector_neg_assign(struct SgVectorDriver drv, SgVector *z)
                       0, &z, 1);
 }
 
-SG_DEFINE_VECTOR_MAP_1(, sg_vector_neg_assign_operation, z, {
+SG_DEFINE_VECTOR_MAP_1(extern, sg_vector_neg_assign_operation, z, {
         *z *= -1.0;
     })
 
 void sg_vector_neg(struct SgVectorDriver drv, const SgVector *x, SgVector *z)
 {
-    SgVector *v[] = {(SgVector *)x, z};
+    SgVector *v[2];
+    v[0] = (SgVector *)x;
+    v[1] = z;
     sg_vector_operate(drv, NULL, 0,
                       &sg_vector_neg_assign_operation, NULL,
                       0, v, sizeof(v) / sizeof(*v));
 }
 
-SG_DEFINE_VECTOR_MAP_2(, sg_vector_neg_operation, z, x, {
+SG_DEFINE_VECTOR_MAP_2(extern, sg_vector_neg_operation, z, x, {
         *z = -*x;
     })
 
@@ -132,7 +137,7 @@ void sg_vector_scale_assign(struct SgVectorDriver drv,
     }
 }
 
-SG_DEFINE_VECTOR_MAP_1(, sg_vector_scale_assign_operation, z, {
+SG_DEFINE_VECTOR_MAP_1(extern, sg_vector_scale_assign_operation, z, {
         const double c = *(const double *)ctx;
         *z *= c;
     })
@@ -151,14 +156,16 @@ void sg_vector_scale(struct SgVectorDriver drv,
     } else if (alpha == -1.0) {
         sg_vector_neg(drv, x, z);
     } else {
-        SgVector *v[] = {(SgVector *)x, z};
+        SgVector *v[2];
+        v[0] = (SgVector *)x;
+        v[1] = z;
         sg_vector_operate(drv, NULL, 0,
                           &sg_vector_scale_operation, &alpha,
                           0, v, sizeof(v) / sizeof(*v));
     }
 }
 
-SG_DEFINE_VECTOR_MAP_2(, sg_vector_scale_operation, x, z, {
+SG_DEFINE_VECTOR_MAP_2(extern, sg_vector_scale_operation, x, z, {
         const double c = *(const double *)ctx;
         *z = c * *x;
     })
@@ -174,15 +181,19 @@ void sg_vector_linear_assign(struct SgVectorDriver drv,
     } else if (alpha == 0.0) {
         sg_vector_scale(drv, beta, y, z);
     } else {
-        double c[] = {alpha, beta};
-        SgVector *v[] = {(SgVector *)y, z};
+        double c[2];
+        SgVector *v[2];
+        c[0] = alpha;
+        c[1] = beta;
+        v[0] = (SgVector *)y;
+        v[1] = z;
         sg_vector_operate(drv, NULL, 0,
                           &sg_vector_linear_assign_operation, &c,
                           0, v, sizeof(v) / sizeof(*v));
     }
 }
 
-SG_DEFINE_VECTOR_MAP_2(, sg_vector_linear_assign_operation, y, z, {
+SG_DEFINE_VECTOR_MAP_2(extern, sg_vector_linear_assign_operation, y, z, {
         const double *const c = (const double *)ctx;
         *z = c[0] * *z + c[1] * *y;
     })
@@ -203,15 +214,20 @@ void sg_vector_linear(struct SgVectorDriver drv,
     } else if (beta == 0.0) {
         sg_vector_scale(drv, alpha, x, z);
     } else {
-        double c[] = {alpha, beta};
-        SgVector *v[] = {(SgVector *)x, (SgVector *)y, z};
+        double c[2];
+        SgVector *v[3];
+        c[0] = alpha;
+        c[1] = beta;
+        v[0] = (SgVector *)x;
+        v[1] = (SgVector *)y;
+        v[2] = z;
         sg_vector_operate(drv, NULL, 0,
                           &sg_vector_linear_operation, &c,
                           0, v, sizeof(v) / sizeof(*v));
     }
 }
 
-SG_DEFINE_VECTOR_MAP_3(, sg_vector_linear_operation, x, y, z, {
+SG_DEFINE_VECTOR_MAP_3(extern, sg_vector_linear_operation, x, y, z, {
         const double *const c = (const double *)ctx;
         *z = c[0] * *x + c[1] * *y;
     })

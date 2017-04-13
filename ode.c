@@ -11,6 +11,7 @@
 #include "vector.h"
 #include "vector_macros.h"
 #include "ode.h"
+#include "restrict_begin.h"
 
 static void vector_div_normsq_operation_inner(double *restrict sum,
                                               const double *restrict numer,
@@ -44,7 +45,9 @@ double vector_div_normsq(struct SgVectorDriver drv,
                          const SgVector *restrict denom)
 {
     double accum = 0.0;
-    SgVector *v[] = {(SgVector *)numer, (SgVector *)denom};
+    SgVector *v[2];
+    v[0] = (SgVector *)numer;
+    v[1] = (SgVector *)denom;
     sg_vector_operate(drv, &accum, -1, &vector_div_normsq_operation, NULL,
                       0, v, sizeof(v) / sizeof(*v));
     return accum;
@@ -67,7 +70,11 @@ void vector_taup(struct SgVectorDriver drv,
                  const SgVector *restrict phi15,
                  SgVector *restrict p)
 {
-    SgVector *v[] = {(SgVector *)y, (SgVector *)phi14, (SgVector *)phi15, p};
+    SgVector *v[4];
+    v[0] = (SgVector *)y;
+    v[1] = (SgVector *)phi14;
+    v[2] = (SgVector *)phi15;
+    v[3] = p;
     sg_vector_operate(drv, NULL, 0, &vector_taup_operation, &h,
                       0, v, sizeof(v) / sizeof(*v));
 }
@@ -183,15 +190,12 @@ void vector_erk(struct SgVectorDriver drv,
                 double *restrict erkm1,
                 double *restrict erkm2)
 {
-    double accum[3] = {0.0, 0.0, 0.0};
-    SgVector *v[] = {
-        (SgVector *)wt,
-        (SgVector *)yp,
-        (SgVector *)phi[0],
-        NULL,
-        NULL,
-    };
     VectorErkOperation *ctx;
+    double accum[3] = {0.0, 0.0, 0.0};
+    SgVector *v[5];
+    v[0] = (SgVector *)wt;
+    v[1] = (SgVector *)yp;
+    v[2] = (SgVector *)phi[0];
     if (k > 2) {
         ctx = &vector_erk_operation_inner3;
         v[3] = (SgVector *)phi[k - 1];
@@ -221,7 +225,9 @@ void vector_ibeta_diff(struct SgVectorDriver drv,
                        const SgVector *restrict phiip1,
                        SgVector *restrict phii)
 {
-    SgVector *v[] = {(SgVector *)phiip1, phii};
+    SgVector *v[2];
+    v[0] = (SgVector *)phiip1;
+    v[1] = phii;
     sg_vector_operate(drv, NULL, 0, &vector_ibeta_diff_operation, &ibetai,
                       0, v, sizeof(v) / sizeof(*v));
 }
@@ -247,14 +253,13 @@ void vector_rhop(struct SgVectorDriver drv,
                  SgVector *restrict y,
                  SgVector *restrict phi14)
 {
-    SgVector *v[] = {
-        (SgVector *)yp,
-        (SgVector *)phi0,
-        (SgVector *)phi15,
-        (SgVector *)p,
-        y,
-        phi14
-    };
+    SgVector *v[6];
+    v[0] = (SgVector *)yp;
+    v[1] = (SgVector *)phi0;
+    v[2] = (SgVector *)phi15;
+    v[3] = (SgVector *)p;
+    v[4] = y;
+    v[5] = phi14;
     sg_vector_operate(drv, NULL, 0, &vector_rhop_operation, &hgk,
                       0, v, sizeof(v) / sizeof(*v));
 }
@@ -272,7 +277,11 @@ void vector_eval_y(struct SgVectorDriver drv,
                    const SgVector *restrict phi0,
                    SgVector *restrict y)
 {
-    SgVector *v[] = {(SgVector *)p, (SgVector *)yp, (SgVector *)phi0, y};
+    SgVector *v[4];
+    v[0] = (SgVector *)p;
+    v[1] = (SgVector *)yp;
+    v[2] = (SgVector *)phi0;
+    v[3] = y;
     sg_vector_operate(drv, NULL, 0, &vector_eval_y_operation, &hgk,
                       0, v, sizeof(v) / sizeof(*v));
 }
@@ -292,7 +301,11 @@ void vector_upd_diffs(struct SgVectorDriver drv,
                       SgVector *restrict phik,
                       SgVector *restrict phikp1)
 {
-    SgVector *v[] = {(SgVector *)yp, (SgVector *)phi0, phik, phikp1};
+    SgVector *v[4];
+    v[0] = (SgVector *)yp;
+    v[1] = (SgVector *)phi0;
+    v[2] = phik;
+    v[3] = phikp1;
     sg_vector_operate(drv, NULL, 0, &vector_upd_diffs_operation, NULL,
                       0, v, sizeof(v) / sizeof(*v));
 }
@@ -313,8 +326,13 @@ void vector_intrp_yout(struct SgVectorDriver drv,
                        SgVector *restrict yout,
                        SgVector *restrict ypout)
 {
-    double ctx[] = {gi, rhoi};
-    SgVector *v[] = {(SgVector *)phii, yout, ypout};
+    double ctx[2];
+    SgVector *v[3];
+    ctx[0] = gi;
+    ctx[1] = rhoi;
+    v[0] = (SgVector *)phii;
+    v[1] = yout;
+    v[2] = ypout;
     sg_vector_operate(drv, NULL, 0, &vector_intrp_yout_operation, &ctx,
                       0, v, sizeof(v) / sizeof(*v));
 }
@@ -332,8 +350,12 @@ void vector_update_wt(struct SgVectorDriver drv,
                       double abseps,
                       SgVector *restrict wt)
 {
-    double ctx[] = {releps, abseps};
-    SgVector *v[] = {(SgVector *)yy, wt};
+    double ctx[2];
+    SgVector *v[2];
+    ctx[0] = releps;
+    ctx[1] = abseps;
+    v[0] = (SgVector *)yy;
+    v[1] = wt;
     sg_vector_operate(drv, NULL, 0, &vector_update_wt_operation, &ctx,
                       0, v, sizeof(v) / sizeof(*v));
 }
@@ -479,12 +501,14 @@ int sg_ode_step(struct SgOde *const self,
                     }
                 }
                 /* update v and set w */
-                const double temp5 = alpha[*ns - 1];
-                for (iq = 0; iq <= *k - *ns; ++iq) {
-                    v[iq] -= temp5 * v[iq + 1];
-                    w[iq] = v[iq];
+                {
+                    const double temp5 = alpha[*ns - 1];
+                    for (iq = 0; iq <= *k - *ns; ++iq) {
+                        v[iq] -= temp5 * v[iq + 1];
+                        w[iq] = v[iq];
+                    }
+                    g[*ns] = w[0];
                 }
-                g[*ns] = w[0];
             }
 
             /* compute the g in the work vector w */
@@ -546,9 +570,11 @@ int sg_ode_step(struct SgOde *const self,
             if (*k >= 2) {
                 erkm1 = absh * sig[*k - 1] * gstr[*k - 2] * sqrt(erkm1);
             }
-            const double temp5 = absh * sqrt(erk);
-            err = temp5 * (g[*k - 1] - g[*k]);
-            erk = temp5 * sig[*k] * gstr[*k - 1];
+            {
+                const double temp5 = absh * sqrt(erk);
+                err = temp5 * (g[*k - 1] - g[*k]);
+                erk = temp5 * sig[*k] * gstr[*k - 1];
+            }
             knew = *k;
 
             /* test if order should be lowered */
@@ -994,18 +1020,13 @@ int sg_ode(void *f_ctx,
            double *restrict work,
            int *restrict iwork)
 {
-    struct SgVectorDriverVt vt = {
-        &vector_try_new,
-        &vector_del,
-        SG_BASIC_VECTOR_DRIVER_VT.operate
-    };
-    struct SimpleDerivFnCtx ctx = {f, f_ctx};
-    struct SgVectorDriver drv = {&neqn, &vt};
+    struct SgVectorDriverVt vt;
+    struct SimpleDerivFnCtx ctx;
     struct SgOde self;
     const size_t iwork_len = 5;
     const size_t work_len = 100 + 21 * neqn;
     const size_t told_index = 91;
-    size_t i, j = 99;
+    size_t i, j;
 
     /* iwork[1] is always nonzero if we're resuming an existing integration */
     const int resume = iwork && iwork[1];
@@ -1040,7 +1061,17 @@ int sg_ode(void *f_ctx,
         return SG_ODE_EINVAL;
     }
 
-    self.drv = drv;
+    vt.try_new = &vector_try_new;
+    vt.del = &vector_del;
+    vt.operate = SG_BASIC_VECTOR_DRIVER_VT.operate;
+
+    self.drv.data = &neqn;
+    self.drv.vtable = &vt;
+
+    ctx.f = f;
+    ctx.ctx = f_ctx;
+
+    j = 99;
     self.yy = work + j;
     j += neqn;
     self.wt = work + j;

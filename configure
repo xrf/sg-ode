@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import itertools, os, shutil, subprocess, tempfile
+import distutils.spawn, itertools, os, shutil, subprocess, sys, tempfile
 
 bins = [
     {
@@ -116,8 +116,24 @@ objs = itertools.chain(*(b["deps"] for b in bins))
 
 macros = {
     "MPICC": "mpicc",
-    "CFLAGS": "-g -O2 -std=c11 -Wall -Wconversion -Wextra -pedantic",
+    "CFLAGS": "-g -O2 -Wall -Wconversion -Wextra -pedantic",
 }
+
+with open(os.devnull, "r+") as fdevnull:
+    if subprocess.call(["cc", "-std=c11", "-c", "-x", "c",
+                        "-o", "/dev/null", "/dev/null"],
+                       stdin=fdevnull,
+                       stdout=fdevnull,
+                       stderr=fdevnull) == 0:
+        macros["CFLAGS"] += " -std=c11"
+    if distutils.spawn.find_executable("mpiexec"):
+        macros["MPIEXEC"] = "mpiexec"
+    elif distutils.spawn.find_executable("mpirun"):
+        macros["MPIEXEC"] = "mpirun"
+    else:
+        sys.stderr.write("cannot find 'mpiexec' or equivalent\n")
+        sys.stderr.flush()
+        sys.exit(1)
 
 subst = {
     "macros": "\n".join("{}={}".format(k, v) for k, v in macros.items()),

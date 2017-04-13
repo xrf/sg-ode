@@ -251,7 +251,9 @@ SG_EXTERN extern struct SgVectorDriverVt SG_BASIC_VECTOR_DRIVER_VT;
 */
 static inline struct SgVectorDriver sg_basic_vector_driver(size_t *len)
 {
-    struct SgVectorDriver drv = {len, &SG_BASIC_VECTOR_DRIVER_VT};
+    struct SgVectorDriver drv;
+    drv.data = len;
+    drv.vtable = &SG_BASIC_VECTOR_DRIVER_VT;
     return drv;
 }
 

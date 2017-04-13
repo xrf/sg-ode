@@ -5,6 +5,7 @@
 #include "mpi_vector.h"
 #include "vector.h"
 #include "vector_macros.h"
+#include "restrict_begin.h"
 
 /* Initialize the vectors with the numbers 0.0, 1.0, 2.0, … */
 SG_DEFINE_VECTOR_MAP_1(static, init_f, v, { *v = (double)index; })
@@ -44,4 +45,5 @@ int main(void)
     }
 
     MPI_Finalize();
+    return 0;
 }

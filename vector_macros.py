@@ -18,8 +18,8 @@ def write_macro(f, n):
     f.write("const size_t _num_elems) \\\n")
     f.write("""
     { \\
-        (void)ctx; \\
         size_t _i; \\
+        (void)ctx; \\
         for (_i = 0; _i < _num_elems; ++_i) { \\
             size_t index = _offset + _i; \\
 """[1:])

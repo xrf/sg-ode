@@ -2,7 +2,7 @@
 LIBS=-lm
 harness=$(HARNESS) timeout 15
 
-all: check
+all: check test
 
 clean:
 	rm -fr bin target *.*_out *.o *.o_mpi *.ok
@@ -14,7 +14,10 @@ doc:
 
 lint: {lint_targets}
 
-.PHONY: all clean check doc lint Makefile
+# just an alias
+test: check
+
+.PHONY: all clean check doc lint test Makefile
 
 {bins}
 
@@ -33,7 +36,7 @@ bin/ode_test_state.ok: bin/ode_test ode_test_state.txt_out
 
 bin/vector_test.ok: bin/vector_test
 	@mkdir -p $(@D)
-	$(harness) mpiexec -np 4 bin/vector_test
+	$(harness) $(MPIEXEC) -np 4 bin/vector_test
 	@touch $@
 
 vector_macros.h: vector_macros.py_out

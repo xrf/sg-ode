@@ -1,0 +1,7 @@
+language: c
+sudo: false
+addons:
+  apt:
+    packages:
+    - libopenmpi-dev
+    - openmpi-bin

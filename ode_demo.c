@@ -68,8 +68,8 @@ int main(void)
     }
 #endif
 
-    printf("neqn=%zu relerr=%g abserr=%g iflag=%i\n",
-           neqn, relerr, abserr, iflag);
+    printf("neqn=%u relerr=%g abserr=%g iflag=%i\n",
+           (unsigned)neqn, relerr, abserr, iflag);
 
 #define dump() \
     printf("t=%2.0f y=[%17.10e %17.10e %17.10e] iflag=%i\n", \
