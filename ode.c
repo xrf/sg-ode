@@ -338,15 +338,10 @@ void vector_update_wt(struct SgVectorDriver drv,
                       0, v, sizeof(v) / sizeof(*v));
 }
 
-int sg_ode_step(double *const restrict y,
+int sg_ode_step(struct SgOde *const self,
                 SgDerivFn *const f,
                 void *const restrict f_ctx,
-                double *const restrict eps,
-                SgVector *const restrict wt,
-                SgVector *const restrict *const phi,
-                SgVector *const restrict p,
-                SgVector *const restrict yp,
-                struct SgOde *const self)
+                double *const restrict eps)
 {
     struct SgVectorDriver drv = self->drv;
     static const double gstr[13] = {
@@ -371,6 +366,11 @@ int sg_ode_step(double *const restrict y,
     double *const v = self->v;
     double *const w = self->w;
     double *const g = self->g;
+    SgVector *const restrict y = self->yy;
+    SgVector *const restrict wt = self->wt;
+    SgVector *const restrict *const phi = self->phi;
+    SgVector *const restrict p = self->p;
+    SgVector *const restrict yp = self->yp;
 
     unsigned knew;
     unsigned i, iq, j;
@@ -848,8 +848,7 @@ void sg_ode_de(struct SgOde *const self,
         vector_update_wt(drv, releps, self->yy, abseps, self->wt);
 
         /* test for tolerances too small */
-        if (sg_ode_step(self->yy, f, f_ctx, &eps, self->wt,
-                        self->phi, self->p, self->yp, self)) {
+        if (sg_ode_step(self, f, f_ctx, &eps)) {
             *iflag = isn ? 3 : -3;
             *relerr = eps * releps;
             *abserr = eps * abseps;

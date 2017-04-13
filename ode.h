@@ -148,15 +148,10 @@ void sg_ode_del(struct SgOde *self);
   tolerance, the user just calls the code again.  A restart is neither
   required nor desirable.
 */
-SG_EXTERN int sg_ode_step(double *restrict y,
+SG_EXTERN int sg_ode_step(struct SgOde *self,
                           SgDerivFn *f,
                           void *restrict f_ctx,
-                          double *restrict eps,
-                          SgVector *restrict wt,
-                          SgVector *const restrict *const phi,
-                          SgVector *restrict p,
-                          SgVector *restrict yp,
-                          struct SgOde *self);
+                          double *restrict eps);
 
 /**
   The methods in function `step` approximate the solution near `x` by a
