@@ -88,7 +88,7 @@ int main(void)
 #ifdef DUMP_STATE
         dump_state(neqn, work, iwork);
 #endif
-        iflag = r == 0 ? 2 : iflag;
+        iflag = r == 0 ? 2 : r;
         dump();
     }
     return 0;

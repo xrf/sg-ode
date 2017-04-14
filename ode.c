@@ -547,7 +547,9 @@ int sg_ode_step(struct SgOde *const self,
             sg_vector_linear_assign(drv, 1.0, 1.0, phi[i + 1], phi[i]);
         }
         if (!*nornd) {
-            /* 𝐩 ← 𝛕′(h, 𝐲, 𝛗[14], 𝛗[15], 𝐩) */
+            /* 𝛕 = h 𝐩 - 𝛗[14]
+               𝐩 ← 𝐲 + 𝛕
+               𝛗[15] ← (𝐩 - 𝐲) - 𝛕 */
             vector_taup(drv, *h, y, phi[14], phi[15], p);
         } else {
             /* 𝐩 ← 𝐲 + h 𝐩 */

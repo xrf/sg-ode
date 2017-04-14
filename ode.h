@@ -68,7 +68,8 @@ struct SgOde {
     /** "iflag_sign_old": whether the user-provided iflag was positive
         (controls whether solver is allowed to overshoot and interpolate) */
     bool isnold;
-    /** probably means "no_round" and has something to do with rounding */
+    /** Indicates whether extra precautions are necessary to reduce round-off
+        error (probably an abbreviation for "no_round_off_error") */
     bool nornd;
     bool phase1;
     /** `true` on first step, `false` otherwise */
