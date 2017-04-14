@@ -1,5 +1,4 @@
 {macros}
-LIBS=-lm
 harness=$(HARNESS) timeout 15
 
 all: check test
