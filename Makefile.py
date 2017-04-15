@@ -1,21 +1,55 @@
 #!/usr/bin/env python
-import itertools, os, subprocess, sys, tempfile
+import glob, itertools, os, subprocess, sys, tempfile
 
-bins = [
-    {
-        "name": "bin/ode_test",
-        "deps": ["ode.o", "ode_demo.o", "vector.o"],
-    },
-    {
-        "name": "bin/vector_test",
+subst = {}
+
+bins = {
+    "bin/vector_test": {
         "deps": ["mpi_vector.o_mpi", "vector.o", "vector_test.o_mpi"],
         "cc": "MPICC",
     },
-]
+}
+
+tests = []
+test_targets = []
+
+for fn in sorted(glob.glob("tests/*.c")):
+    if fn in ["tests/main.c"]:
+        continue
+    name, _ = os.path.splitext(os.path.basename(fn))
+    bins["bin/{name}_test".format(**locals())] = {
+        "deps": ["tests/main.o", "ode.o", "vector.o",
+                 os.path.splitext(fn)[0] + ".o"],
+    }
+    target = "bin/{name}_test.ok".format(**locals())
+    test_targets.append(target)
+    tests.append("""
+{target}: bin/{name}_test tests/{name}$(TESTSUFFIX).txt_out
+	@mkdir -p $(@D)
+	$(harness) bin/{name}_test $(TESTFLAGS) >tests/{name}.out
+	@git --no-pager diff --exit-code --no-index $(GITDIFFFLAGS) tests/{name}.out tests/{name}$(TESTSUFFIX).txt_out
+	@touch $@
+"""[1:].format(**locals()))
+
+subst["tests"] = "\n".join(tests)
+subst["test_targets"] = " ".join(test_targets)
+
+def bin_rule(name, b):
+    deps = " ".join(b["deps"])
+    cc = b.get("cc", "CC")
+    return """
+{name}: {deps}
+	mkdir -p $(@D)
+	$({cc}) $(CFLAGS) -o $@ {deps} $(LIBS)
+"""[1:].format(**locals())
+
+subst["bins"] = "\n".join(bin_rule(n, b)
+                          for n, b in sorted(bins.items())).rstrip("\n")
 
 # list of all patterns for source files
 # (used for vpath builds)
-vpath_patterns = ["%.c", "%.h", "%.py", "%.txt"]
+# if make complains about missing files when linting this is probably why
+vpath_patterns = ["%.c", "%.h", "%.inl", "%.py", "%.txt"]
 
 # Notes
 #
@@ -36,14 +70,14 @@ lints = {
         },
     },
     "clang_asan": {
-        "targets": ["bin/ode_test.ok"],
+        "targets": ["check_ode"],
         "macros": {
             "CC": "clang",
             "CFLAGS": "$(CFLAGS) -fsanitize=address",
         },
     },
     "clang_msan": {
-        "targets": ["bin/ode_test.ok"],
+        "targets": ["check_ode"],
         "macros": {
             "CC": "clang",
             "CFLAGS": "$(CFLAGS) -fsanitize=memory",
@@ -58,21 +92,13 @@ lints = {
         },
     },
     "dump_state": {
-        "targets": ["bin/ode_test_state.ok"],
+        "targets": ["check_ode"],
         "macros": {
-            "CPPFLAGS": "-DDUMP_STATE",
+            "TESTSUFFIX": "_state",
+            "TESTFLAGS": "--dump-state",
         },
     },
 }
-
-def bin_rule(b):
-    return """
-{name}: {deps}
-	mkdir -p $(@D)
-	$({cc}) $(CFLAGS) -o $@ {deps} $(LIBS)
-"""[1:].format(name=b["name"],
-               deps=" ".join(b["deps"]),
-               cc=b.get("cc", "CC"))
 
 def lint_target(target):
     return "target/{target}/.ok".format(target=target)
@@ -82,21 +108,25 @@ def lint_rule(target, lint, vpath_patterns):
     # use vpath instead of VPATH to avoid interference from non-VPATH builds
     vpaths = "\n".join(
         "\t@echo 'vpath {pattern} $$(src)' >>$(@D)/Makefile"
-        .format(target=target, pattern=pattern)
+        .format(**locals())
         for pattern in sorted(vpath_patterns))
+    tar = lint_target(target)
+    targets = " ".join(sorted(lint["targets"]))
+    macros = " ".join("{}='{}'".format(k, v)
+                      for k, v in sorted(lint["macros"].items()))
     return """
-{lint_target}:
+{tar}:
 	@mkdir -p $(@D)
 	@echo 'src=../../' >$(@D)/Makefile
 {vpaths}
 	@echo '_all: {targets}' >>$(@D)/Makefile
 	@echo 'include $$(src)Makefile' >>$(@D)/Makefile
 	$(MAKE) -C $(@D) {macros}
-"""[1:].format(lint_target=lint_target(target),
-               vpaths=vpaths,
-               targets=" ".join(sorted(lint["targets"])),
-               macros=" ".join("{}='{}'".format(k, v)
-                               for k, v in sorted(lint["macros"].items())))
+"""[1:].format(**locals())
+
+subst["lints"] = "\n".join(lint_rule(k, v, vpath_patterns)
+                           for k, v in sorted(lints.items()))
+subst["lint_targets"] = " ".join(lint_target(k) for k in sorted(lints))
 
 def get_deps(objs):
     deps = set()
@@ -112,14 +142,10 @@ def get_deps(objs):
             deps.update(s.strip() for s in f.read().split("\n\n"))
     return "\n\n".join(sorted(deps))
 
-subst = {
-    "macros": "\n".join(sys.argv[1:]),
-    "bins": "\n".join(bin_rule(b) for b in bins).rstrip("\n"),
-    "deps": get_deps(list(itertools.chain(*(b["deps"] for b in bins)))),
-    "lints": "\n".join(lint_rule(k, v, vpath_patterns)
-                       for k, v in sorted(lints.items())),
-    "lint_targets": " ".join(lint_target(k) for k in sorted(lints)),
-}
+subst["deps"] = get_deps(list(itertools.chain(*(b["deps"]
+                                                for b in bins.values()))))
+
+subst["macros"] = "\n".join(sys.argv[1:])
 
 with open("Makefile.in") as f:
     template = f.read()

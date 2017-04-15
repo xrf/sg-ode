@@ -1,12 +1,14 @@
 {macros}
 harness=$(HARNESS) timeout 15
 
-all: check test
+all:
 
 clean:
 	rm -fr bin target *.*_out *.o *.o_mpi *.ok
 
-check: bin/ode_test.ok bin/vector_test.ok
+check: check_ode bin/vector_test.ok
+
+check_ode: {test_targets}
 
 doc:
 	doxygen
@@ -16,22 +18,9 @@ lint: {lint_targets}
 # just an alias
 test: check
 
-.PHONY: all clean check doc lint test Makefile
+.PHONY: all clean check check_ode doc lint test Makefile
 
 {bins}
-
-bin/ode_test.ok: bin/ode_test ode_demo.txt_out
-	@mkdir -p $(@D)
-	$(harness) bin/ode_test >ode_test.out
-	@git --no-pager diff --exit-code --no-index $(GITDIFFFLAGS) ode_test.out ode_demo.txt_out
-	@touch $@
-
-# this one is intended to be run in a separate tree by the linter
-bin/ode_test_state.ok: bin/ode_test ode_test_state.txt_out
-	@mkdir -p $(@D)
-	$(harness) bin/ode_test >ode_test.out
-	@git --no-pager diff --exit-code --no-index $(GITDIFFFLAGS) ode_test.out ode_test_state.txt_out
-	@touch $@
 
 bin/vector_test.ok: bin/vector_test
 	@mkdir -p $(@D)
@@ -44,19 +33,24 @@ vector_macros.h: vector_macros.py_out
 .SUFFIXES: .c .o .o_mpi .py .py_out .txt .txt_out
 
 .c.o:
+	mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
 .c.o_mpi:
+	mkdir -p $(@D)
 	$(MPICC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
 .py.py_out:
+	mkdir -p $(@D)
 	cp -p $< $@
 
 .txt.txt_out:
+	mkdir -p $(@D)
 	cp -p $< $@
 
 Makefile:
 	@[ ! -x ./config.status ] || ./config.status
 
 {lints}
+{tests}
 {deps}
