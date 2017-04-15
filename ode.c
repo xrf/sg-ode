@@ -646,8 +646,12 @@ int sg_ode_step(struct SgOde *const self,
     {
         const double hgk = *h * g[*k];
         if (!*nornd) {
+            /* 𝛒 = h g[k] (𝐲′ - 𝛗[0]) - 𝛗[15]
+               𝐲 ← 𝐩 + 𝛒
+               𝛗[14] ← (𝐲 - 𝐩) - 𝛒 */
             vector_rhop(drv, hgk, yp, phi[0], phi[15], p, y, phi[14]);
         } else {
+            /* 𝐲 ← 𝐩 + h g[k] (𝐲′ - 𝛗[0]) */
             vector_eval_y(drv, p, hgk, yp, phi[0], y);
         }
     }
