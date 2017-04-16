@@ -1,36 +1,126 @@
-{macros}
+DIFF=git --no-pager diff --exit-code --no-index
 harness=$(HARNESS) timeout 15
 
 all:
 
-clean:
-	rm -fr bin target *.*_out *.o *.o_mpi *.ok
-
 check: check_ode bin/vector_test.ok
 
-check_ode: {test_targets}
+check_ode: bin/jacobian_elliptic_a_test.ok bin/jacobian_elliptic_b_test.ok
 
 doc:
 	doxygen
 
-lint: {lint_targets}
+lint: target/gcc_valgrind target/clang_asan target/clang_msan target/clang_ubsan target/dump_state
 
-# just an alias
+target/clang_asan:
+	@printf '' >$@/Makefile
+	@echo vpath %.c ../../ >>$@/Makefile
+	@echo vpath %.h ../../ >>$@/Makefile
+	@echo vpath %.inl ../../ >>$@/Makefile
+	@echo vpath %.py ../../ >>$@/Makefile
+	@echo vpath %.txt ../../ >>$@/Makefile
+	@echo _all: check_ode >>$@/Makefile
+	@echo include ../../Makefile >>$@/Makefile
+	$(MAKE) -C $@ CC='clang' CFLAGS='$(CFLAGS) -fsanitize=address'
+
+target/clang_msan:
+	@printf '' >$@/Makefile
+	@echo vpath %.c ../../ >>$@/Makefile
+	@echo vpath %.h ../../ >>$@/Makefile
+	@echo vpath %.inl ../../ >>$@/Makefile
+	@echo vpath %.py ../../ >>$@/Makefile
+	@echo vpath %.txt ../../ >>$@/Makefile
+	@echo _all: check_ode >>$@/Makefile
+	@echo include ../../Makefile >>$@/Makefile
+	$(MAKE) -C $@ CC='clang' CFLAGS='$(CFLAGS) -fsanitize=memory'
+
+target/clang_ubsan:
+	@printf '' >$@/Makefile
+	@echo vpath %.c ../../ >>$@/Makefile
+	@echo vpath %.h ../../ >>$@/Makefile
+	@echo vpath %.inl ../../ >>$@/Makefile
+	@echo vpath %.py ../../ >>$@/Makefile
+	@echo vpath %.txt ../../ >>$@/Makefile
+	@echo _all: check >>$@/Makefile
+	@echo include ../../Makefile >>$@/Makefile
+	$(MAKE) -C $@ CC='clang' CFLAGS='$(CFLAGS) -fsanitize=undefined' MPICC='OMPI_CC=$$(CC) MPICH_CC=$$(CC) $(MPICC)'
+
+target/dump_state:
+	@printf '' >$@/Makefile
+	@echo vpath %.c ../../ >>$@/Makefile
+	@echo vpath %.h ../../ >>$@/Makefile
+	@echo vpath %.inl ../../ >>$@/Makefile
+	@echo vpath %.py ../../ >>$@/Makefile
+	@echo vpath %.txt ../../ >>$@/Makefile
+	@echo _all: check_ode >>$@/Makefile
+	@echo include ../../Makefile >>$@/Makefile
+	$(MAKE) -C $@ TESTFLAGS='--dump-state' TESTSUFFIX='_state'
+
+target/gcc_valgrind:
+	@printf '' >$@/Makefile
+	@echo vpath %.c ../../ >>$@/Makefile
+	@echo vpath %.h ../../ >>$@/Makefile
+	@echo vpath %.inl ../../ >>$@/Makefile
+	@echo vpath %.py ../../ >>$@/Makefile
+	@echo vpath %.txt ../../ >>$@/Makefile
+	@echo _all: check >>$@/Makefile
+	@echo include ../../Makefile >>$@/Makefile
+	$(MAKE) -C $@ CC='gcc' CFLAGS='$(CFLAGS) -O3' HARNESS='valgrind --error-exitcode=1 -q' MPICC='OMPI_CC=$$(CC) MPICH_CC=$$(CC) $(MPICC)'
+
 test: check
 
-.PHONY: all clean check check_ode doc lint test Makefile
+bin/jacobian_elliptic_a_test.ok: bin/jacobian_elliptic_a_test tests/jacobian_elliptic_a$(TESTSUFFIX).txt_out
+	mkdir -p $(@D)
+	$(harness) $(@:.ok=) $(TESTFLAGS) >$(@:.ok=.out)
+	$(DIFF) $(@:.ok=.out) tests/jacobian_elliptic_a$(TESTSUFFIX).txt_out
+	@touch $@
 
-{bins}
+bin/jacobian_elliptic_a_test: tests/main.o ode.o vector.o tests/jacobian_elliptic_a.o
+	mkdir -p $(@D)
+	$(CC) $(CFLAGS) -o $@ tests/main.o ode.o vector.o tests/jacobian_elliptic_a.o $(LIBS)
+
+bin/jacobian_elliptic_b_test.ok: bin/jacobian_elliptic_b_test tests/jacobian_elliptic_b$(TESTSUFFIX).txt_out
+	mkdir -p $(@D)
+	$(harness) $(@:.ok=) $(TESTFLAGS) >$(@:.ok=.out)
+	$(DIFF) $(@:.ok=.out) tests/jacobian_elliptic_b$(TESTSUFFIX).txt_out
+	@touch $@
+
+bin/jacobian_elliptic_b_test: tests/main.o ode.o vector.o tests/jacobian_elliptic_b.o
+	mkdir -p $(@D)
+	$(CC) $(CFLAGS) -o $@ tests/main.o ode.o vector.o tests/jacobian_elliptic_b.o $(LIBS)
 
 bin/vector_test.ok: bin/vector_test
-	@mkdir -p $(@D)
+	mkdir -p $(@D)
 	$(harness) $(MPIEXEC) -np 4 bin/vector_test
 	@touch $@
 
+bin/vector_test: vector_test.o_mpi mpi_vector.o_mpi vector.o
+	mkdir -p $(@D)
+	$(MPICC) $(CFLAGS) -o $@ vector_test.o_mpi mpi_vector.o_mpi vector.o $(LIBS)
+
+clean:
+	rm -fr bin/jacobian_elliptic_a_test bin/jacobian_elliptic_a_test.ok bin/jacobian_elliptic_b_test bin/jacobian_elliptic_b_test.ok bin/vector_test bin/vector_test.ok mpi_vector.o_mpi ode.o tests/jacobian_elliptic_a.o tests/jacobian_elliptic_b.o tests/main.o vector.o vector_test.o_mpi
+
+mpi_vector.o_mpi: mpi_vector.c vector.h extern.h inline_begin.h restrict_begin.h restrict_end.h inline_end.h utils.h mpi_vector.h thread_local_begin.h
+
+ode.o: ode.c utils.h inline_begin.h inline_end.h vector.h extern.h restrict_begin.h restrict_end.h vector_macros.h ode.h
+
+tests/jacobian_elliptic_a.o: tests/jacobian_elliptic_a.c tests/jacobian_elliptic.inl
+
+tests/jacobian_elliptic_b.o: tests/jacobian_elliptic_b.c tests/jacobian_elliptic.inl
+
+tests/main.o: tests/main.c tests/../ode.h tests/../vector.h tests/../extern.h tests/../inline_begin.h tests/../restrict_begin.h tests/../restrict_end.h tests/../inline_end.h
+
+vector.o: vector.c utils.h inline_begin.h inline_end.h vector_macros.h vector.h extern.h restrict_begin.h restrict_end.h
+
 vector_macros.h: vector_macros.py_out
+	mkdir -p $(@D)
 	./vector_macros.py_out
 
-.SUFFIXES: .c .o .o_mpi .py .py_out .txt .txt_out
+vector_test.o_mpi: vector_test.c mpi_vector.h vector.h extern.h inline_begin.h restrict_begin.h restrict_end.h inline_end.h vector_macros.h
+
+Makefile:
+	@[ ! -x ./config.status ] || ./config.status
 
 .c.o:
 	mkdir -p $(@D)
@@ -42,15 +132,12 @@ vector_macros.h: vector_macros.py_out
 
 .py.py_out:
 	mkdir -p $(@D)
-	cp -p $< $@
+	ln $< $@
 
 .txt.txt_out:
 	mkdir -p $(@D)
-	cp -p $< $@
+	ln $< $@
 
-Makefile:
-	@[ ! -x ./config.status ] || ./config.status
+.SUFFIXES: .c .o .o_mpi .py .py_out .txt .txt_out
 
-{lints}
-{tests}
-{deps}
+.PHONY: Makefile all check check_ode doc lint target/clang_asan target/clang_msan target/clang_ubsan target/dump_state target/gcc_valgrind test

@@ -44,11 +44,18 @@ if macros["CFLAGS"] is None:
         macros["CFLAGS"] += " -std=c99"
 
 with open("config.status.tmp", "w") as f:
-    f.write("#!/bin/sh\n")
-    f.write("exec ./Makefile.py \\\n{}"
-            .format("".join(
-                "    {}={} \\\n"
-                .format(k, "'{0}'".format(v.replace("'", "'\\''")))
+    f.write("""
+#!/bin/sh
+if type makegen >/dev/null 2>&1; then
+    makegen ./Makefile.py
+fi &&
+{{
+{}    cat Makefile.in
+}} >Makefile.tmp &&
+mv Makefile.tmp Makefile
+"""[1:].format("".join(
+    "    echo {}={} &&\n"
+    .format(k, "'{0}'".format(v.replace("'", "'\\''")))
                 for k, v in sorted(macros.items())
                 if v is not None)))
 os.chmod("config.status.tmp", 0o755)

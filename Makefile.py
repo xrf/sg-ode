@@ -1,50 +1,74 @@
 #!/usr/bin/env python
-import glob, itertools, os, subprocess, sys, tempfile
+import glob, itertools, os, re, sys
+import makegen2 as mk
 
-subst = {}
+def make_src(path, suffix="_out"):
+    '''Source files for non-inference rules should be wrapped using this rule
+    to ensure VPATH works properly.'''
+    _, ext = os.path.splitext(path)
+    if not re.match("\.\w+\Z", ext):
+        raise ValueError("weird path extension: {!r}".format(ext))
+    if not re.match("\w+\Z", suffix):
+        raise ValueError("invalid suffix: {!r}".format(ext))
+    return mk.Make(path + "_out",
+                   [mk.InferenceRule(ext, ext + suffix, ["ln $< $@"]).make()])
 
-bins = {
-    "bin/vector_test": {
-        "deps": ["mpi_vector.o_mpi", "vector.o", "vector_test.o_mpi"],
-        "cc": "MPICC",
-    },
-}
+# ------------------------------------------------------------------------
+# Main rules
 
-tests = []
-test_targets = []
+makefile = mk.make()
 
-for fn in sorted(glob.glob("tests/*.c")):
-    if fn in ["tests/main.c"]:
+default = makefile.append(mk.make("all", phony=True))
+makefile |= mk.make("doc", [], ["doxygen"], phony=True)
+makefile |= mk.make("Makefile", [],
+                    ["@[ ! -x ./config.status ] || ./config.status"],
+                    phony=True)
+makefile |= mk.make("vector_macros.h", [make_src("vector_macros.py")],
+                    lambda script: ["./{}".format(script)],
+                    clean=False)
+
+# ------------------------------------------------------------------------
+# Test rules
+
+check_ode = makefile.append(mk.make("check_ode", phony=True))
+check = makefile.append(mk.make("check", [check_ode], phony=True))
+makefile |= mk.make("test", [check], phony=True) # alias
+
+t = mk.make_bin("bin/vector_test",
+                [
+                    mk.make_c_obj("vector_test.c", via=mk.C_MPI_INFERENCE_RULE),
+                    mk.make_c_obj("mpi_vector.c", via=mk.C_MPI_INFERENCE_RULE),
+                    "vector.c",
+                ],
+                ld="$(MPICC) $(CFLAGS)")
+check |= mk.make(t.name + ".ok",
+                 [t],
+                 ["$(harness) $(MPIEXEC) -np 4 {}".format(t.name),
+                  "@touch $@"])
+
+for path in sorted(glob.glob("tests/*.c")):
+    if path in ["tests/main.c"]:
         continue
-    name, _ = os.path.splitext(os.path.basename(fn))
-    bins["bin/{name}_test".format(**locals())] = {
-        "deps": ["tests/main.o", "ode.o", "vector.o",
-                 os.path.splitext(fn)[0] + ".o"],
-    }
-    target = "bin/{name}_test.ok".format(**locals())
-    test_targets.append(target)
-    tests.append("""
-{target}: bin/{name}_test tests/{name}$(TESTSUFFIX).txt_out
-	@mkdir -p $(@D)
-	$(harness) bin/{name}_test $(TESTFLAGS) >tests/{name}.out
-	@git --no-pager diff --exit-code --no-index $(GITDIFFFLAGS) tests/{name}.out tests/{name}$(TESTSUFFIX).txt_out
-	@touch $@
-"""[1:].format(**locals()))
+    name, _ = os.path.splitext(os.path.basename(path))
+    exe_name = "bin/{}_test".format(name)
+    check_ode |= mk.make(
+        exe_name + ".ok",
+        [
+            mk.make_bin(exe_name, ["tests/main.c", "ode.c", "vector.c", path]),
+            make_src("tests/{}$(TESTSUFFIX).txt".format(name)),
+        ],
+        lambda _, txt: [
+            "$(harness) $(@:.ok=) $(TESTFLAGS) >$(@:.ok=.out)",
+            "$(DIFF) $(@:.ok=.out) {}".format(txt),
+            "@touch $@",
+        ],
+        macros={
+            "DIFF": "git --no-pager diff --exit-code --no-index",
+            "harness": "$(HARNESS) timeout 15",
+        })
 
-subst["tests"] = "\n".join(tests)
-subst["test_targets"] = " ".join(test_targets)
-
-def bin_rule(name, b):
-    deps = " ".join(b["deps"])
-    cc = b.get("cc", "CC")
-    return """
-{name}: {deps}
-	mkdir -p $(@D)
-	$({cc}) $(CFLAGS) -o $@ {deps} $(LIBS)
-"""[1:].format(**locals())
-
-subst["bins"] = "\n".join(bin_rule(n, b)
-                          for n, b in sorted(bins.items())).rstrip("\n")
+# ------------------------------------------------------------------------
+# Lint rules
 
 # list of all patterns for source files
 # (used for vpath builds)
@@ -59,95 +83,51 @@ vpath_patterns = ["%.c", "%.h", "%.inl", "%.py", "%.txt"]
 #   - Address and memory sanitizers require all external libraries to be
 #     recompiled, so we're avoid sanitizing any tests that require MPI.
 #
-lints = {
-    "gcc_valgrind": {
-        "targets": ["check"],
-        "macros": {
-            "CC": "gcc",
-            "CFLAGS": "$(CFLAGS) -O3",
-            "HARNESS": "valgrind --error-exitcode=1 -q",
-            "MPICC": "OMPI_CC=$$(CC) MPICH_CC=$$(CC) $(MPICC)",
-        },
-    },
-    "clang_asan": {
-        "targets": ["check_ode"],
-        "macros": {
-            "CC": "clang",
-            "CFLAGS": "$(CFLAGS) -fsanitize=address",
-        },
-    },
-    "clang_msan": {
-        "targets": ["check_ode"],
-        "macros": {
-            "CC": "clang",
-            "CFLAGS": "$(CFLAGS) -fsanitize=memory",
-        },
-    },
-    "clang_ubsan": {
-        "targets": ["check"],
-        "macros": {
-            "CC": "clang",
-            "CFLAGS": "$(CFLAGS) -fsanitize=undefined",
-            "MPICC": "OMPI_CC=$$(CC) MPICH_CC=$$(CC) $(MPICC)",
-        },
-    },
-    "dump_state": {
-        "targets": ["check_ode"],
-        "macros": {
-            "TESTSUFFIX": "_state",
-            "TESTFLAGS": "--dump-state",
-        },
-    },
-}
 
-def lint_target(target):
-    return "target/{target}/.ok".format(target=target)
+lint = makefile.append(mk.make("lint", phony=True))
 
-def lint_rule(target, lint, vpath_patterns):
-    # requires GNU Make;
-    # use vpath instead of VPATH to avoid interference from non-VPATH builds
-    vpaths = "\n".join(
-        "\t@echo 'vpath {pattern} $$(src)' >>$(@D)/Makefile"
-        .format(**locals())
-        for pattern in sorted(vpath_patterns))
-    tar = lint_target(target)
-    targets = " ".join(sorted(lint["targets"]))
-    macros = " ".join("{}='{}'".format(k, v)
-                      for k, v in sorted(lint["macros"].items()))
-    return """
-{tar}:
-	@mkdir -p $(@D)
-	@echo 'src=../../' >$(@D)/Makefile
-{vpaths}
-	@echo '_all: {targets}' >>$(@D)/Makefile
-	@echo 'include $$(src)Makefile' >>$(@D)/Makefile
-	$(MAKE) -C $(@D) {macros}
-"""[1:].format(**locals())
+def make_lint(name, targets, macros):
+    return mk.make_vpath(os.path.join("target", name),
+                         targets=targets,
+                         macros=macros,
+                         vpath_patterns=vpath_patterns)
 
-subst["lints"] = "\n".join(lint_rule(k, v, vpath_patterns)
-                           for k, v in sorted(lints.items()))
-subst["lint_targets"] = " ".join(lint_target(k) for k in sorted(lints))
+lint |= make_lint("gcc_valgrind",
+                  targets=["check"],
+                  macros={
+                      "CC": "gcc",
+                      "CFLAGS": "$(CFLAGS) -O3",
+                      "HARNESS": "valgrind --error-exitcode=1 -q",
+                      "MPICC": "OMPI_CC=$$(CC) MPICH_CC=$$(CC) $(MPICC)",
+                  })
+lint |= make_lint("clang_asan",
+                  targets=["check_ode"],
+                  macros={
+                      "CC": "clang",
+                      "CFLAGS": "$(CFLAGS) -fsanitize=address",
+                  })
+lint |= make_lint("clang_msan",
+                  targets=["check_ode"],
+                  macros={
+                      "CC": "clang",
+                      "CFLAGS": "$(CFLAGS) -fsanitize=memory",
+                  })
+lint |= make_lint("clang_ubsan",
+                  targets=["check"],
+                  macros={
+                      "CC": "clang",
+                      "CFLAGS": "$(CFLAGS) -fsanitize=undefined",
+                      "MPICC": "OMPI_CC=$$(CC) MPICH_CC=$$(CC) $(MPICC)",
+                  })
+lint |= make_lint("dump_state",
+                  targets=["check_ode"],
+                  macros={
+                      "TESTSUFFIX": "_state",
+                      "TESTFLAGS": "--dump-state",
+                  })
 
-def get_deps(objs):
-    deps = set()
-    for obj in objs:
-        src = os.path.splitext(obj)[0] + ".c"
-        with tempfile.NamedTemporaryFile(mode="r") as f:
-            e = subprocess.call(["cc", "-o", "/dev/null", "-M", "-MG", "-MM",
-                                 "-MT", obj, "-MF", f.name, src])
-            if e:
-                sys.stderr.write("warning: dependency generation for "
-                                 "{obj} failed\n")
-                sys.stderr.flush()
-            deps.update(s.strip() for s in f.read().split("\n\n"))
-    return "\n\n".join(sorted(deps))
+# ------------------------------------------------------------------------
+# Finish
 
-subst["deps"] = get_deps(list(itertools.chain(*(b["deps"]
-                                                for b in bins.values()))))
-
-subst["macros"] = "\n".join(sys.argv[1:])
-
-with open("Makefile.in") as f:
-    template = f.read()
-with open("Makefile", "w") as f:
-    f.write(template.format(**subst))
+makefile |= mk.make(macros=(s.split("=", 1) for s in sys.argv[1:]))
+makefile.save("Makefile.in", out_name="Makefile", cache=".Makefile.cache~")
