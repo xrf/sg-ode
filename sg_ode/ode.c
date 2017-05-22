@@ -1139,6 +1139,7 @@ int sg_ode(void *f_ctx,
     const size_t work_len = 100 + 21 * neqn;
     const size_t told_index = 91;
     size_t i, j;
+    unsigned maxnum = 500;
 
     /* iwork[1] is always nonzero if we're resuming an existing integration */
     const int resume = iwork && iwork[1];
@@ -1149,8 +1150,8 @@ int sg_ode(void *f_ctx,
     int iflag = (flag & SG_ODE_FSTRICT ? -1 : 1) * (resume ? 2 : 1);
 
     /* make sure the arguments are valid */
-    if (flag < 0 || flag > SG_ODE_FSTRICT) {
-        fprintf(stderr, "sg_ode: invalid argument for 'flag'\n");
+    if (flag < 0 || flag > (SG_ODE_FSTRICT | SG_ODE_FMAXNUM)) {
+        fprintf(stderr, "sg_ode: invalid argument for 'flag': %i\n", flag);
         fflush(stderr);
         return SG_ODE_EINVAL;
     }
@@ -1171,6 +1172,9 @@ int sg_ode(void *f_ctx,
     if (resume && !(*t == work[told_index])) {
         fprintf(stderr, "sg_ode: can't resume from a different 't'\n");
         return SG_ODE_EINVAL;
+    }
+    if (flag & SG_ODE_FMAXNUM) {
+        maxnum = (unsigned)(iwork[5] > 0 ? iwork[5] : 0);
     }
 
     vt.try_new = &vector_try_new;
@@ -1203,7 +1207,8 @@ int sg_ode(void *f_ctx,
         unpack_state(work, iwork, &self);
     }
 
-    sg_ode_de(&self, wrapper, &ctx, y, t, tout, &relerr, &abserr, 500, &iflag);
+    sg_ode_de(&self, wrapper, &ctx, y, t, tout,
+              &relerr, &abserr, maxnum, &iflag);
 
     pack_state(&self, work, iwork);
 

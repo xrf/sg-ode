@@ -15,6 +15,10 @@ extern "C" {
 /** Do not integrate beyond the target. */
 #define SG_ODE_FSTRICT 0x1
 
+/** Use the value of iwork[5] to set the maximum number of iterations.
+    Otherwise, the default of 500 is used. */
+#define SG_ODE_FMAXNUM 0x2
+
 /** Integration did not reach target because the error tolerances were too
     small given the limitations of machine precision.
 
@@ -355,8 +359,11 @@ SG_EXTERN void sg_ode_de(struct SgOde *self,
      the local error and solution vectors.  Both are required to be positive.
 
    @param[in] flag
-     Either `#SG_ODE_FSTRICT` or zero.  If `#SG_ODE_FSTRICT` is not specified,
-     then the solver may integrate slightly past the target.
+     Bit flag containing some possibly empty combination of `#SG_ODE_FSTRICT`
+     and `#SG_ODE_FMAXNUM`.  If `#SG_ODE_FSTRICT` is not specified, then the
+     solver may integrate slightly past the target.  If `#SG_ODE_FMAXNUM` is
+     set, the value of `iwork[5]` determines the maximum number of iterations,
+     which would have otherwise been 500 by default.
 
    @param[in,out] work
      A buffer of length `21 * neqn + 100`.  When resuming integration, it must
@@ -364,9 +371,10 @@ SG_EXTERN void sg_ode_de(struct SgOde *self,
      initialized when starting a new integration.)
 
    @param[in,out] iwork
-     A buffer of length 5.  When starting a new integration, the buffer *must
-     be initialized to zero*.  When resuming integration, it must retain the
-     same contents as before.
+     A buffer of length 5, or 6 if `SG_ODE_FMAXNUM` is set.  When starting a
+     new integration, all elements except `iwork[5]` *must be initialized to
+     zero*.  When resuming integration, it must retain the same contents as
+     before.
 
    @return
      Zero if the integration was successful.  Otherwise, returns one of the
