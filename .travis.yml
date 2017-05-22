@@ -5,5 +5,8 @@ addons:
     packages:
     - libopenmpi-dev
     - openmpi-bin
+before_script:
+- echo 'CFLAGS+=-Wall -Wconversion -Wextra -pedantic -std=c99' >config.mk
 script:
-- make CFLAGS='-g -O2 -Wall -Wconversion -Wextra -pedantic -std=c99' check
+- make
+- make check
