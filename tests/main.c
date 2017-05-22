@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../ode.h"
+#include <sg_ode.h>
 
 extern const double ts[], y_initial[], relerr, abserr;
 

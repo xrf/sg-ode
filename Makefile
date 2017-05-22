@@ -16,7 +16,7 @@ MPICDEPFLAGS=-MD -MP -MT $@ -MF $*.dep_mpi
 
 -include config.mk
 
-CPPFLAGS+=-DSG_BUILD
+CPPFLAGS+=-DSG_BUILD -I.
 
 all: lib/libsgode.so
 
@@ -26,8 +26,7 @@ clean:
 install: all
 	install -d $(DESTDIR)$(PREFIX)/include/sg_ode $(DESTDIR)$(PREFIX)/lib
 	install -m644 -t $(DESTDIR)$(PREFIX)/include sg_ode.h
-	install -m644 -t $(DESTDIR)$(PREFIX)/include/sg_ode extern.h ode.h restrict_begin.h restrict_end.h vector.h
-	install -m644 -t $(DESTDIR)$(PREFIX)/lib lib/libsgode.a
+	install -m644 -t $(DESTDIR)$(PREFIX)/include/sg_ode sg_ode/extern.h sg_ode/ode.h sg_ode/restrict_begin.h sg_ode/restrict_end.h sg_ode/vector.h
 	install -m755 -t $(DESTDIR)$(PREFIX)/lib lib/libsgode.so.$(version)
 	cp -P lib/libsgode.so lib/libsgode.so.$(major) $(DESTDIR)$(PREFIX)/lib
 
@@ -37,7 +36,7 @@ lib/libsgode.so: lib/libsgode.so.$(major)
 lib/libsgode.so.$(major): lib/libsgode.so.$(version)
 	ln -fs libsgode.so.$(version) $@
 
-lib/libsgode.so.$(version): ode.o vector.o
+lib/libsgode.so.$(version): sg_ode/ode.o sg_ode/vector.o
 	@mkdir -p $(@D)
 	$(CC) $(LDFLAGS) $(SHAREDFLAGS) -o $@ $^ $(LDLIBS)
 
@@ -56,19 +55,19 @@ bin/vector_test.ok: bin/vector_test
 	$(harness) $(MPIEXEC) -np 4 bin/vector_test
 	@touch $@
 
-bin/jacobian_elliptic_a_test: tests/main.o ode.o vector.o tests/jacobian_elliptic_a.o
+bin/jacobian_elliptic_a_test: tests/main.o sg_ode/ode.o sg_ode/vector.o tests/jacobian_elliptic_a.o
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
 
-bin/jacobian_elliptic_b_test: tests/main.o ode.o vector.o tests/jacobian_elliptic_b.o
+bin/jacobian_elliptic_b_test: tests/main.o sg_ode/ode.o sg_ode/vector.o tests/jacobian_elliptic_b.o
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
 
-bin/vector_test: vector_test.o_mpi mpi_vector.o_mpi vector.o
+bin/vector_test: sg_ode/vector_test.o_mpi sg_ode/mpi_vector.o_mpi sg_ode/vector.o
 	@mkdir -p $(@D)
 	$(MPICC) $(CFLAGS) -o $@ $^ $(LDLIBS)
 
-vector_macros.h: vector_macros.py
+sg_ode/vector_macros.h: sg_ode/vector_macros.py
 	@mkdir -p $(@D)
 	./$<
 
