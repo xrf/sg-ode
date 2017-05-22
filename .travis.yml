@@ -1,10 +1,5 @@
 language: c
 sudo: false
-addons:
-  apt:
-    packages:
-    - libopenmpi-dev
-    - openmpi-bin
 before_script:
 - echo 'CFLAGS+=-Wall -Wconversion -Wextra -pedantic -std=c99' >config.mk
 script:

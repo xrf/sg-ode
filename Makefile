@@ -3,16 +3,12 @@ version=$(major).2.0
 
 CFLAGS?=-g -O2 -fPIC -fvisibility=hidden
 LDLIBS?=-lm
-MPICC?=mpicc
-MPIEXEC?=mpiexec
 PREFIX?=/usr/local
 
+CDEPFLAGS=-MD -MP -MT $@ -MF $*.dep
 SHAREDFLAGS=-shared -Wl,-soname,libsgode.so.$(major)
 DIFF=git --no-pager diff --exit-code --no-index
 harness=$(HARNESS) timeout 15
-
-CDEPFLAGS=-MD -MP -MT $@ -MF $*.dep
-MPICDEPFLAGS=-MD -MP -MT $@ -MF $*.dep_mpi
 
 -include config.mk
 
@@ -21,7 +17,7 @@ CPPFLAGS+=-DSG_BUILD -I.
 all: lib/libsgode.so
 
 clean:
-	rm -fr bin lib target *.o *.o_mpi */*.o */*.o_mpi */*.out
+	rm -fr bin lib target *.dep *.o */*.dep */*.o */*.out
 
 install: all
 	install -d $(DESTDIR)$(PREFIX)/include/sg_ode $(DESTDIR)$(PREFIX)/lib
@@ -40,19 +36,12 @@ lib/libsgode.so.$(version): sg_ode/ode.o sg_ode/vector.o
 	@mkdir -p $(@D)
 	$(CC) $(LDFLAGS) $(SHAREDFLAGS) -o $@ $^ $(LDLIBS)
 
-check: check_ode bin/vector_test.ok
-
-check_ode: bin/jacobian_elliptic_a_test.ok bin/jacobian_elliptic_b_test.ok
+check: bin/jacobian_elliptic_a_test.ok bin/jacobian_elliptic_b_test.ok
 
 bin/%_test.ok: bin/%_test tests/%$(TESTSUFFIX).txt
 	@mkdir -p $(@D)
 	$(harness) $(@:.ok=) $(TESTFLAGS) >$(@:.ok=.out)
 	$(DIFF) $(@:.ok=.out) $(word 2,$^)
-	@touch $@
-
-bin/vector_test.ok: bin/vector_test
-	@mkdir -p $(@D)
-	$(harness) $(MPIEXEC) -np 4 bin/vector_test
 	@touch $@
 
 bin/jacobian_elliptic_a_test: tests/main.o sg_ode/ode.o sg_ode/vector.o tests/jacobian_elliptic_a.o
@@ -62,10 +51,6 @@ bin/jacobian_elliptic_a_test: tests/main.o sg_ode/ode.o sg_ode/vector.o tests/ja
 bin/jacobian_elliptic_b_test: tests/main.o sg_ode/ode.o sg_ode/vector.o tests/jacobian_elliptic_b.o
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
-
-bin/vector_test: sg_ode/vector_test.o_mpi sg_ode/mpi_vector.o_mpi sg_ode/vector.o
-	@mkdir -p $(@D)
-	$(MPICC) $(CFLAGS) -o $@ $^ $(LDLIBS)
 
 sg_ode/vector_macros.h: sg_ode/vector_macros.py
 	@mkdir -p $(@D)
@@ -101,11 +86,11 @@ doc/html/.git/config:
 #   - Address and memory sanitizers require all external libraries to be
 #     recompiled, so we're avoid sanitizing any tests that require MPI.
 
-target/clang_asan: makeflags=CC=clang CFLAGS='$(CFLAGS) -fsanitize=address' check_ode
-target/clang_msan: makeflags=CC=clang CFLAGS='$(CFLAGS) -fsanitize=memory' check_ode
-target/clang_ubsan: makeflags=CC=clang CFLAGS='$(CFLAGS) -fsanitize=undefined' MPICC='OMPI_CC=$$(CC) MPICH_CC=$$(CC) $(MPICC)' check
-target/dump_state: makeflags=TESTFLAGS=--dump-state TESTSUFFIX=_state check_ode
-target/gcc_valgrind: makeflags=CC=gcc CFLAGS='$(CFLAGS) -O3' HARNESS='valgrind --error-exitcode=1 -q' MPICC='OMPI_CC=$$(CC) MPICH_CC=$$(CC) $(MPICC)' check
+target/clang_asan: makeflags=CC=clang CFLAGS='$(CFLAGS) -fsanitize=address' check
+target/clang_msan: makeflags=CC=clang CFLAGS='$(CFLAGS) -fsanitize=memory' check
+target/clang_ubsan: makeflags=CC=clang CFLAGS='$(CFLAGS) -fsanitize=undefined' check
+target/dump_state: makeflags=TESTFLAGS=--dump-state TESTSUFFIX=_state check
+target/gcc_valgrind: makeflags=CC=gcc CFLAGS='$(CFLAGS) -O3' HARNESS='valgrind --error-exitcode=1 -q' check
 
 lints!=sed -n 's|^\(target/[^:%][^:%]*\).*|\1|p' Makefile
 
@@ -132,12 +117,8 @@ $(lints):
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(CDEPFLAGS) -c -o $@ $<
 
-.c.o_mpi:
-	@mkdir -p $(@D)
-	$(MPICC) $(CPPFLAGS) $(CFLAGS) $(MPICDEPFLAGS) -c -o $@ $<
+.SUFFIXES: .c .o
 
-.SUFFIXES: .c .o .o_mpi
+.PHONY: Makefile all check deploy-doc doc install lint $(lints)
 
-.PHONY: Makefile all check check_ode deploy-doc doc install lint $(lints)
-
--include $(wildcard *.dep) $(wildcard *.dep_mpi) $(wildcard */*.dep) $(wildcard */*.dep_mpi)
+-include $(wildcard *.dep) $(wildcard */*.dep)
