@@ -5,3 +5,5 @@ addons:
     packages:
     - libopenmpi-dev
     - openmpi-bin
+script:
+- make CFLAGS='-g -O2 -Wall -Wconversion -Wextra -pedantic -std=c99' check

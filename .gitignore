@@ -1,7 +1,6 @@
 bin/
-config.status
-Makefile
-*.*_out
+config.mk
+*.dep_*
 *.o_*
 *.ok
 *.out
