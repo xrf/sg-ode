@@ -132,11 +132,11 @@ Makefile:
 
 .py.py_out:
 	mkdir -p $(@D)
-	ln $< $@
+	ln -f $< $@
 
 .txt.txt_out:
 	mkdir -p $(@D)
-	ln $< $@
+	ln -f $< $@
 
 .SUFFIXES: .c .o .o_mpi .py .py_out .txt .txt_out
 

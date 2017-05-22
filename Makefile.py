@@ -11,7 +11,7 @@ def make_src(path, suffix="_out"):
     if not re.match("\w+\Z", suffix):
         raise ValueError("invalid suffix: {!r}".format(ext))
     return mk.Make(path + "_out",
-                   [mk.InferenceRule(ext, ext + suffix, ["ln $< $@"]).make()])
+                   [mk.InferenceRule(ext, ext + suffix, ["ln -f $< $@"]).make()])
 
 # ------------------------------------------------------------------------
 # Main rules

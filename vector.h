@@ -86,7 +86,7 @@ struct SgVectorDriverVt {
         the `SgVectorDriver`. */
     SgVector *(*try_new)(SgVectorDriverBase *self);
 
-    /** Destroys a vector. */
+    /** Destroys a vector.  This is a no-op if the vector is null. */
     void (*del)(SgVectorDriverBase *self, SgVector *vector);
 
     /** Applies an element-wise operation (map) to a set of vectors and then
@@ -140,13 +140,13 @@ struct SgVectorDriver {
     struct SgVectorDriverVt *vtable;
 };
 
-/** Creates a vectorm, returning `NULL` if it fails. */
+/** Creates a vector, returning `NULL` if it fails. */
 SG_EXTERN SgVector *sg_vector_try_new(struct SgVectorDriver drv);
 
 /** Creates a vector. */
 SG_EXTERN SgVector *sg_vector_new(struct SgVectorDriver drv);
 
-/** Destroys a vector. */
+/** Destroys the vector.  This is a no-op if the vector is null.  */
 SG_EXTERN void sg_vector_del(struct SgVectorDriver drv, SgVector *vector);
 
 /** Gets the length of any vector created by this vector driver. */

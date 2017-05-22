@@ -360,6 +360,83 @@ void vector_update_wt(struct SgVectorDriver drv,
                       0, v, sizeof(v) / sizeof(*v));
 }
 
+struct SgOde {
+    struct SgVectorDriver drv;
+
+    /** Solution vector at `x` */
+    SgVector *yy;
+    /** Derivative of solution vector at `x` after successful step */
+    SgVector *yp;
+    /** Vector of weights for error criterion */
+    SgVector *wt;
+    SgVector *p, *ypout, *phi[16];
+
+    double alpha[12], beta[12], sig[13], v[12], w[12], g[13], psi[12];
+
+    /** Independent variable */
+    double x;
+    /** Appropriate step size for next step.  Normally determined by code */
+    double h;
+    /** Step size used for last successful step */
+    double hold;
+    double told, delsgn;
+    unsigned ns;
+    /** Appropriate order for next step (determined by code).
+        Invariant: k >= 1 && k < 13 */
+    unsigned k;
+    /** Order used for last successful step */
+    unsigned kold;
+    /** "iflag_sign_old": whether the user-provided iflag was positive
+        (controls whether solver is allowed to overshoot and interpolate) */
+    bool isnold;
+    /** Indicates whether extra precautions are necessary to reduce round-off
+        error (probably an abbreviation for "no_round_off_error") */
+    bool nornd;
+    bool phase1;
+    /** `true` on first step, `false` otherwise */
+    bool start;
+};
+
+int sg_ode_traverse(struct SgOde *self,
+                    int (*f)(void *ctx, void *data, int type, size_t len),
+                    void *ctx)
+{
+    (*f)(ctx, &self->yy, SG_ODE_TYPE_VECTOR, 1);
+    (*f)(ctx, &self->yp, SG_ODE_TYPE_VECTOR, 1);
+    (*f)(ctx, &self->wt, SG_ODE_TYPE_VECTOR, 1);
+    (*f)(ctx, &self->p, SG_ODE_TYPE_VECTOR, 1);
+    (*f)(ctx, &self->ypout, SG_ODE_TYPE_VECTOR, 1);
+    (*f)(ctx, &self->phi, SG_ODE_TYPE_VECTOR,
+         sizeof(self->phi) / sizeof(*self->phi));
+    (*f)(ctx, &self->alpha, SG_ODE_TYPE_DOUBLE,
+         sizeof(self->alpha) / sizeof(*self->alpha));
+    (*f)(ctx, &self->beta, SG_ODE_TYPE_DOUBLE,
+         sizeof(self->beta) / sizeof(*self->beta));
+    (*f)(ctx, &self->sig, SG_ODE_TYPE_DOUBLE,
+         sizeof(self->sig) / sizeof(*self->sig));
+    (*f)(ctx, &self->v, SG_ODE_TYPE_DOUBLE,
+         sizeof(self->v) / sizeof(*self->v));
+    (*f)(ctx, &self->w, SG_ODE_TYPE_DOUBLE,
+         sizeof(self->w) / sizeof(*self->w));
+    (*f)(ctx, &self->g, SG_ODE_TYPE_DOUBLE,
+         sizeof(self->g) / sizeof(*self->g));
+    (*f)(ctx, &self->psi, SG_ODE_TYPE_DOUBLE,
+         sizeof(self->psi) / sizeof(*self->psi));
+    (*f)(ctx, &self->x, SG_ODE_TYPE_DOUBLE, 1);
+    (*f)(ctx, &self->h, SG_ODE_TYPE_DOUBLE, 1);
+    (*f)(ctx, &self->hold, SG_ODE_TYPE_DOUBLE, 1);
+    (*f)(ctx, &self->told, SG_ODE_TYPE_DOUBLE, 1);
+    (*f)(ctx, &self->delsgn, SG_ODE_TYPE_DOUBLE, 1);
+    (*f)(ctx, &self->ns, SG_ODE_TYPE_UNSIGNED, 1);
+    (*f)(ctx, &self->k, SG_ODE_TYPE_UNSIGNED, 1);
+    (*f)(ctx, &self->kold, SG_ODE_TYPE_UNSIGNED, 1);
+    (*f)(ctx, &self->isnold, SG_ODE_TYPE_BOOL, 1);
+    (*f)(ctx, &self->nornd, SG_ODE_TYPE_BOOL, 1);
+    (*f)(ctx, &self->phase1, SG_ODE_TYPE_BOOL, 1);
+    (*f)(ctx, &self->start, SG_ODE_TYPE_BOOL, 1);
+    return 0;
+}
+
 int sg_ode_step(struct SgOde *const self,
                 SgDerivFn *const f,
                 void *const restrict f_ctx,
@@ -902,23 +979,51 @@ void sg_ode_de(struct SgOde *const self,
     }
 }
 
-void sg_ode_init(struct SgOde *self, struct SgVectorDriver drv)
+struct SgOde *sg_ode_try_new(struct SgVectorDriver drv)
 {
+    static const struct SgOde EMPTY;
     size_t i;
-    self->drv = drv;
-    self->yy = sg_vector_new(self->drv);
-    self->wt = sg_vector_new(self->drv);
-    self->p = sg_vector_new(self->drv);
-    self->yp = sg_vector_new(self->drv);
-    self->ypout = sg_vector_new(self->drv);
-    for (i = 0; i < sizeof(self->phi) / sizeof(*self->phi); ++i) {
-        self->phi[i] = sg_vector_new(self->drv);
+    struct SgOde *self = (struct SgOde *)malloc(sizeof(struct SgOde));
+    if (!self) {
+        return NULL;
     }
+    *self = EMPTY;
+    self->drv = drv;
+    if (!(self->yy = sg_vector_try_new(self->drv))) {
+        sg_ode_del(self);
+        return NULL;
+    }
+    if (!(self->wt = sg_vector_try_new(self->drv))) {
+        sg_ode_del(self);
+        return NULL;
+    }
+    if (!(self->p = sg_vector_try_new(self->drv))) {
+        sg_ode_del(self);
+        return NULL;
+    }
+    if (!(self->yp = sg_vector_try_new(self->drv))) {
+        sg_ode_del(self);
+        return NULL;
+    }
+    if (!(self->ypout = sg_vector_try_new(self->drv))) {
+        sg_ode_del(self);
+        return NULL;
+    }
+    for (i = 0; i < sizeof(self->phi) / sizeof(*self->phi); ++i) {
+        if (!(self->phi[i] = sg_vector_new(self->drv))) {
+            sg_ode_del(self);
+            return NULL;
+        }
+    }
+    return 0;
 }
 
 void sg_ode_del(struct SgOde *self)
 {
     size_t i;
+    if (!self) {
+        return;
+    }
     for (i = 0; i < sizeof(self->phi) / sizeof(*self->phi); ++i) {
         sg_vector_del(self->drv, self->phi[i]);
     }
@@ -927,6 +1032,7 @@ void sg_ode_del(struct SgOde *self)
     sg_vector_del(self->drv, self->p);
     sg_vector_del(self->drv, self->wt);
     sg_vector_del(self->drv, self->yy);
+    free(self);
 }
 
 static SgVector *vector_try_new(SgVectorDriverBase *self)

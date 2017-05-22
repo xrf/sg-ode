@@ -39,46 +39,20 @@ typedef void SgDerivFn(void *f_ctx,
                        const SgVector *restrict y,
                        SgVector *restrict yp);
 
-struct SgOde {
-    struct SgVectorDriver drv;
-
-    /** Solution vector at `x` */
-    SgVector *yy;
-    /** Derivative of solution vector at `x` after successful step */
-    SgVector *yp;
-    /** Vector of weights for error criterion */
-    SgVector *wt;
-    SgVector *p, *ypout, *phi[16];
-
-    double alpha[12], beta[12], sig[13], v[12], w[12], g[13], psi[12];
-
-    /** Independent variable */
-    double x;
-    /** Appropriate step size for next step.  Normally determined by code */
-    double h;
-    /** Step size used for last successful step */
-    double hold;
-    double told, delsgn;
-    unsigned ns;
-    /** Appropriate order for next step (determined by code).
-        Invariant: k >= 1 && k < 13 */
-    unsigned k;
-    /** Order used for last successful step */
-    unsigned kold;
-    /** "iflag_sign_old": whether the user-provided iflag was positive
-        (controls whether solver is allowed to overshoot and interpolate) */
-    bool isnold;
-    /** Indicates whether extra precautions are necessary to reduce round-off
-        error (probably an abbreviation for "no_round_off_error") */
-    bool nornd;
-    bool phase1;
-    /** `true` on first step, `false` otherwise */
-    bool start;
-};
-
-void sg_ode_init(struct SgOde *self, struct SgVectorDriver drv);
+struct SgOde *sg_ode_try_new(struct SgVectorDriver drv);
 
 void sg_ode_del(struct SgOde *self);
+
+enum {
+    SG_ODE_TYPE_BOOL,
+    SG_ODE_TYPE_DOUBLE,
+    SG_ODE_TYPE_UNSIGNED,
+    SG_ODE_TYPE_VECTOR,
+};
+
+int sg_ode_traverse(struct SgOde *self,
+                    int (*f)(void *ctx, void *data, int type, size_t len),
+                    void *ctx);
 
 /**
   Integrates a system of first order ordinary differential equations one step,
