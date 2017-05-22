@@ -34,15 +34,6 @@ extern "C" {
 /** Invalid argument(s). */
 #define SG_ODE_EINVAL 6
 
-typedef void SgDerivFn(void *f_ctx,
-                       double t,
-                       const SgVector *restrict y,
-                       SgVector *restrict yp);
-
-struct SgOde *sg_ode_try_new(struct SgVectorDriver drv);
-
-void sg_ode_del(struct SgOde *self);
-
 enum {
     SG_ODE_TYPE_BOOL,
     SG_ODE_TYPE_DOUBLE,
@@ -50,9 +41,21 @@ enum {
     SG_ODE_TYPE_VECTOR,
 };
 
-int sg_ode_traverse(struct SgOde *self,
-                    int (*f)(void *ctx, void *data, int type, size_t len),
-                    void *ctx);
+typedef void SgDerivFn(void *f_ctx,
+                       double t,
+                       const SgVector *restrict y,
+                       SgVector *restrict yp);
+
+SG_EXTERN struct SgOde *sg_ode_try_new(struct SgVectorDriver drv);
+
+SG_EXTERN void sg_ode_del(struct SgOde *self);
+
+SG_EXTERN int sg_ode_traverse(struct SgOde *self,
+                              int (*f)(void *ctx,
+                                       void *data,
+                                       int type,
+                                       size_t len),
+                              void *ctx);
 
 /**
   Integrates a system of first order ordinary differential equations one step,
