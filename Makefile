@@ -45,7 +45,7 @@ target/build/$(libsgode): sg_ode/ode.o sg_ode/vector.o
 	$(CC) $(CFLAGS) $(LDFLAGS) $(call SHAREDFLAGS,sgode,$(major),$(minor),$(patch)) -o $@ $^ $(LDLIBS)
 	cd $(@D) && $(call SHAREDLN,sgode,$(major),$(minor),$(patch))
 
-check: target/build/jacobian_elliptic_a_test.ok target/build/jacobian_elliptic_b_test.ok target/build/stiff_test.ok
+check: target/build/arguments_test.ok target/build/jacobian_elliptic_a_test.ok target/build/jacobian_elliptic_b_test.ok target/build/stiff_test.ok
 
 target/build/%_test.ok: target/build/%_test tests/%$(TESTSUFFIX).txt
 	@mkdir -p $(@D)
@@ -56,6 +56,10 @@ target/build/%_test.ok: target/build/%_test tests/%$(TESTSUFFIX).txt
 target/build/%_test: tests/main.o tests/%.o target/build/$(libsgode)
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(RPATH_ORIGIN) -Ltarget/build -o $@ $(wordlist 1,2,$^) $(LDLIBS) -lsgode
+
+target/build/arguments_test: tests/arguments.o target/build/$(libsgode)
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) $(LDFLAGS) $(RPATH_ORIGIN) -Ltarget/build -o $@ $< $(LDLIBS) -lsgode
 
 tests/%$(TESTSUFFIX).txt:
 	touch $@

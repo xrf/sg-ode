@@ -1142,7 +1142,7 @@ int sg_ode(void *f_ctx,
     unsigned maxnum = 500;
 
     /* iwork[1] is always nonzero if we're resuming an existing integration */
-    const int resume = iwork && iwork[1];
+    const int resume = iwork ? iwork[1] : 0;
 
     /* the solver only cares about whether |iflag| is 1 or something else
        (although zero will cause a fatal error) so we just choose 2 for
@@ -1160,17 +1160,24 @@ int sg_ode(void *f_ctx,
         fflush(stderr);
         return SG_ODE_EINVAL;
     }
+    if (!t) {
+        fprintf(stderr, "sg_ode: t must not be null\n");
+        fflush(stderr);
+        return SG_ODE_EINVAL;
+    }
     if (neqn == 0 || *t == tout) {
         /* there's nothing to do! */
         *t = tout;
         return 0;
     }
-    if (!f || !y || !t || !work || !iwork) {
+    if (!f || !y || !work || !iwork) {
         fprintf(stderr, "sg_ode: received null argument(s)\n");
+        fflush(stderr);
         return SG_ODE_EINVAL;
     }
     if (resume && !(*t == work[told_index])) {
         fprintf(stderr, "sg_ode: can't resume from a different 't'\n");
+        fflush(stderr);
         return SG_ODE_EINVAL;
     }
     if (flag & SG_ODE_FMAXNUM) {
