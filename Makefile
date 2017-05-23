@@ -45,7 +45,7 @@ target/build/$(libsgode): sg_ode/ode.o sg_ode/vector.o
 	$(CC) $(CFLAGS) $(LDFLAGS) $(call SHAREDFLAGS,sgode,$(major),$(minor),$(patch)) -o $@ $^ $(LDLIBS)
 	cd $(@D) && $(call SHAREDLN,sgode,$(major),$(minor),$(patch))
 
-check: target/build/jacobian_elliptic_a_test.ok target/build/jacobian_elliptic_b_test.ok
+check: target/build/jacobian_elliptic_a_test.ok target/build/jacobian_elliptic_b_test.ok target/build/stiff_test.ok
 
 target/build/%_test.ok: target/build/%_test tests/%$(TESTSUFFIX).txt
 	@mkdir -p $(@D)
