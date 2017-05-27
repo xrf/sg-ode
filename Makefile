@@ -57,6 +57,8 @@ target/build/%_test: tests/main.o tests/%.o target/build/$(libsgode)
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(RPATH_ORIGIN) -Ltarget/build -o $@ $(wordlist 1,2,$^) $(LDLIBS) -lsgode
 
+target/build/arguments_test.ok: TESTFLAGS+=2>$@.log
+
 target/build/arguments_test: tests/arguments.o target/build/$(libsgode)
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(RPATH_ORIGIN) -Ltarget/build -o $@ $< $(LDLIBS) -lsgode

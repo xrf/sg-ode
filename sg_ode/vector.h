@@ -64,30 +64,24 @@ typedef void SgVectorOperation(void *f_ctx,
                                double **data,
                                size_t num_elems);
 
-/** Minimal structure of an `SgVectorDriverBase` object (“base class”).  An
-    actual instance may hold additional information, but all drivers must
-    store `SgVectorDriverBase` (i.e. a length) as their first element.
-
-    This should be the length of all vectors created by this driver.  Once a
-    driver has been created, this attribute must not be modified. */
-typedef size_t SgVectorDriverBase;
+/** Represents an opaque vector driver. */
+typedef void SgVectorDriverBase;
 
 /** The minimal set of operations that a vector driver must support.
 
     A vector driver allows element-wise operations and reductions on a vector,
     as well as creation and destruction.
-
-    All functions within this struct require exclusive access to the `self`
-    object.  Therefore, one must not call any of `SgVectorDriver`'s functions
-    with the same `self` object while any another function is running.
 */
 struct SgVectorDriverVt {
+    /** Retrieve the length of vectors created by this driver. */
+    size_t (*len)(const SgVectorDriverBase *self);
+
     /** Creates a new uninitialized vector with a fixed length determined by
         the `SgVectorDriver`. */
-    SgVector *(*try_new)(SgVectorDriverBase *self);
+    SgVector *(*try_new)(const SgVectorDriverBase *self);
 
     /** Destroys a vector.  This is a no-op if the vector is null. */
-    void (*del)(SgVectorDriverBase *self, SgVector *vector);
+    void (*del)(const SgVectorDriverBase *self, SgVector *vector);
 
     /** Applies an element-wise operation (map) to a set of vectors and then
         accumulates a combined result (fold) of a monoidal operation.
@@ -123,7 +117,7 @@ struct SgVectorDriverVt {
         The number of `vectors`.
 
     */
-    void (*operate)(SgVectorDriverBase *self,
+    void (*operate)(const SgVectorDriverBase *self,
                     SgVectorAccum *accum,
                     SgVectorAccumType accum_type,
                     SgVectorOperation *f,
@@ -136,8 +130,8 @@ struct SgVectorDriverVt {
 /** A vector driver.  This is just a driver pointer combined with its vtable
     pointer for convenience. */
 struct SgVectorDriver {
-    SgVectorDriverBase *data;
-    struct SgVectorDriverVt *vtable;
+    const SgVectorDriverBase *data;
+    const struct SgVectorDriverVt *vtable;
 };
 
 /** Creates a vector, returning `NULL` if it fails. */

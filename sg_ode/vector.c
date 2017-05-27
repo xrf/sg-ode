@@ -26,7 +26,7 @@ void sg_vector_del(struct SgVectorDriver drv, SgVector *vector)
 
 size_t sg_vector_len(struct SgVectorDriver drv)
 {
-    return *drv.data;
+    return (*drv.vtable->len)(drv.data);
 }
 
 void sg_vector_operate(struct SgVectorDriver drv,
@@ -261,19 +261,23 @@ void sg_vector_sum_operation(void *f_ctx,
     *(double *)accum = s;
 }
 
-static SgVector *basic_vector_try_new(SgVectorDriverBase *self)
+static size_t basic_vector_len(const SgVectorDriverBase *self)
 {
-    const size_t len = *(const size_t *)self;
-    return check_oom(malloc(len * sizeof(double)));
+    return *(const size_t *)self;
 }
 
-static void basic_vector_del(SgVectorDriverBase *self, SgVector *vector)
+static SgVector *basic_vector_try_new(const SgVectorDriverBase *self)
+{
+    return malloc(basic_vector_len(self) * sizeof(double));
+}
+
+static void basic_vector_del(const SgVectorDriverBase *self, SgVector *vector)
 {
     (void)self;
     free(vector);
 }
 
-static void basic_vector_operate(SgVectorDriverBase *len,
+static void basic_vector_operate(const SgVectorDriverBase *self,
                                  SgVectorAccum *accum,
                                  SgVectorAccumType accum_type,
                                  SgVectorOperation f,
@@ -315,13 +319,14 @@ static void basic_vector_operate(SgVectorDriverBase *len,
         data[i] = (double *)vectors[i];
     }
 
-    (*f)(f_ctx, accum, zero, offset, data, *len);
+    (*f)(f_ctx, accum, zero, offset, data, basic_vector_len(self));
 
     free(data);
     free(zero);
 }
 
 struct SgVectorDriverVt SG_BASIC_VECTOR_DRIVER_VT = {
+    &basic_vector_len,
     &basic_vector_try_new,
     &basic_vector_del,
     &basic_vector_operate

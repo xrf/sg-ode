@@ -1035,7 +1035,7 @@ void sg_ode_del(struct SgOde *self)
     free(self);
 }
 
-static SgVector *vector_try_new(SgVectorDriverBase *self)
+static SgVector *vector_try_new(const SgVectorDriverBase *self)
 {
     (void)self;
     fprintf(stderr, "try_new is not supported for this driver\n");
@@ -1043,7 +1043,7 @@ static SgVector *vector_try_new(SgVectorDriverBase *self)
     abort();
 }
 
-static void vector_del(SgVectorDriverBase *self, SgVector *vector)
+static void vector_del(const SgVectorDriverBase *self, SgVector *vector)
 {
     (void)self;
     (void)vector;
@@ -1132,7 +1132,7 @@ int sg_ode(void *f_ctx,
            double *restrict work,
            int *restrict iwork)
 {
-    struct SgVectorDriverVt vt;
+    struct SgVectorDriverVt vt = SG_BASIC_VECTOR_DRIVER_VT;
     struct SimpleDerivFnCtx ctx;
     struct SgOde self;
     const size_t iwork_len = 5;
@@ -1184,12 +1184,10 @@ int sg_ode(void *f_ctx,
         maxnum = (unsigned)(iwork[5] > 0 ? iwork[5] : 0);
     }
 
+    self.drv = sg_basic_vector_driver(&neqn);
+    self.drv.vtable = &vt;
     vt.try_new = &vector_try_new;
     vt.del = &vector_del;
-    vt.operate = SG_BASIC_VECTOR_DRIVER_VT.operate;
-
-    self.drv.data = &neqn;
-    self.drv.vtable = &vt;
 
     ctx.f = f;
     ctx.ctx = f_ctx;
