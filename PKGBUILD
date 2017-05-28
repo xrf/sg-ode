@@ -1,6 +1,6 @@
 # Maintainer: Fei Yuan <yuan@nscl.msu.edu>
 pkgname=sg-ode-git
-pkgver=latest
+pkgver=r79.fe78698
 pkgrel=1
 pkgdesc="ODE solver by Shampine and Gordon"
 arch=(i686 x86_64)
@@ -9,14 +9,12 @@ license=(LGPL)
 makedepends=(git)
 provides=(sg-ode)
 conflicts=(sg-ode)
-source=($pkgname::git://github.com/xrf/sg-ode)
+source=($pkgname::git://github.com/xrf/sg-ode#branch=v2)
 sha256sums=(SKIP)
 
 pkgver() {
     cd "$srcdir/$pkgname"
-    s=`git 2>/dev/null describe --long --tags`
-    if [ $? -eq 0 ]
-    then
+    if s=`git 2>/dev/null describe --long --tags`; then
         printf '%s' "$s" | sed 's/^v//;s/\([^-]*-\)g/r\1/;s/-/./g'
     else
         printf 'r%s.%s' "`git rev-list --count HEAD`" \

@@ -1,4 +1,4 @@
-CFLAGS?=-g -O2 -fPIC -fvisibility=hidden
+CFLAGS?=-g -O2 -fvisibility=hidden
 LDLIBS?=-lm
 PREFIX?=/usr/local
 
@@ -11,6 +11,7 @@ RPATH_ORIGIN=-Wl,-rpath,'$$ORIGIN'
 #   - SHAREDFLAGS are the flags needed to link the shared library
 #   - SHAREDLN are commands used to create the symbolic links
 #
+SHAREDCFLAGS=-fPIC
 SHAREDNAME=lib$(1).so.$(2).$(3).$(4)
 SHAREDFLAGS=-shared -Wl,-soname,lib$(1).so.$(2)
 SHAREDLN=ln -fs lib$(1).so.$(2).$(3).$(4) lib$(1).so.$(2) && ln -fs lib$(1).so.$(2).$(3).$(4) lib$(1).so
@@ -20,6 +21,7 @@ harness=$(HARNESS) timeout 15
 
 -include config.mk
 
+CFLAGS+=$(SHAREDCFLAGS)
 sg_ode/%.o: CPPFLAGS+=-DSG_BUILD
 tests/%.o: CPPFLAGS+=-I.
 
