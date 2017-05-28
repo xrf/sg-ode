@@ -857,8 +857,8 @@ void sg_ode_de(struct SgOde *const self,
                const double tout,
                double *const restrict relerr,
                double *const restrict abserr,
-               const unsigned maxnum,
-               int *const restrict iflag)
+               int *const restrict iflag,
+               const unsigned maxnum)
 {
     struct SgVectorDriver drv = self->drv;
     const bool isn = *iflag >= 0;
@@ -1213,7 +1213,7 @@ int sg_ode(void *f_ctx,
     }
 
     sg_ode_de(&self, wrapper, &ctx, y, t, tout,
-              &relerr, &abserr, maxnum, &iflag);
+              &relerr, &abserr, &iflag, maxnum);
 
     pack_state(&self, work, iwork);
 

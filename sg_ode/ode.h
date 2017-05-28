@@ -316,8 +316,8 @@ SG_EXTERN void sg_ode_de(struct SgOde *self,
                          double tout,
                          double *restrict relerr,
                          double *restrict abserr,
-                         unsigned maxnum,
-                         int *restrict iflag);
+                         int *restrict iflag,
+                         unsigned maxnum);
 
 /**
    Simple interface to the ODE solver.
