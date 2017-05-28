@@ -192,10 +192,13 @@ void vector_erk(struct SgVectorDriver drv,
 {
     VectorErkOperation *ctx;
     double accum[3] = {0.0, 0.0, 0.0};
-    SgVector *v[5];
-    v[0] = (SgVector *)wt;
-    v[1] = (SgVector *)yp;
-    v[2] = (SgVector *)phi[0];
+    SgVector *v[5] = {
+        (SgVector *)wt,
+        (SgVector *)yp,
+        (SgVector *)phi[0],
+        (SgVector *)wt,                 /* dummy value */
+        (SgVector *)wt                  /* dummy value */
+    };
     if (k > 2) {
         ctx = &vector_erk_operation_inner3;
         v[3] = (SgVector *)phi[k - 1];
@@ -1010,12 +1013,12 @@ struct SgOde *sg_ode_try_new(struct SgVectorDriver drv)
         return NULL;
     }
     for (i = 0; i < sizeof(self->phi) / sizeof(*self->phi); ++i) {
-        if (!(self->phi[i] = sg_vector_new(self->drv))) {
+        if (!(self->phi[i] = sg_vector_try_new(self->drv))) {
             sg_ode_del(self);
             return NULL;
         }
     }
-    return 0;
+    return self;
 }
 
 void sg_ode_del(struct SgOde *self)

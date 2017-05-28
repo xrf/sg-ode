@@ -22,8 +22,9 @@ harness=$(HARNESS) timeout 15
 -include config.mk
 
 CFLAGS+=$(SHAREDCFLAGS)
+top?=.
 sg_ode/%.o: CPPFLAGS+=-DSG_BUILD
-tests/%.o: CPPFLAGS+=-I.
+tests/%.o: CPPFLAGS+=-I$(top)
 
 major=1
 minor=2
@@ -38,7 +39,7 @@ clean:
 install: all
 	install -d $(DESTDIR)$(PREFIX)/include/sg_ode $(DESTDIR)$(PREFIX)/lib
 	install -m644 -t $(DESTDIR)$(PREFIX)/include sg_ode.h
-	install -m644 -t $(DESTDIR)$(PREFIX)/include/sg_ode sg_ode/extern.h sg_ode/ode.h sg_ode/restrict_begin.h sg_ode/restrict_end.h sg_ode/vector.h
+	install -m644 -t $(DESTDIR)$(PREFIX)/include/sg_ode sg_ode/extern.h sg_ode/inline_begin.h sg_ode/inline_end.h sg_ode/ode.h sg_ode/restrict_begin.h sg_ode/restrict_end.h sg_ode/vector.h
 	install -m755 -t $(DESTDIR)$(PREFIX)/lib target/build/$(libsgode)
 	cd $(DESTDIR)$(PREFIX)/lib $(LN_SHARED) && $(call SHAREDLN,sgode,$(major),$(minor),$(patch))
 
@@ -117,13 +118,13 @@ lint: $(lints)
 # If make complains about missing files when linting this is probably why
 $(lints):
 	@mkdir -p $@
-	@printf '' >$@/Makefile
-	@echo vpath %.c ../../ >>$@/Makefile
-	@echo vpath %.h ../../ >>$@/Makefile
-	@echo vpath %.inl ../../ >>$@/Makefile
-	@echo vpath %.py ../../ >>$@/Makefile
-	@echo vpath %.txt ../../ >>$@/Makefile
-	@echo include ../../Makefile >>$@/Makefile
+	@echo top=../../ >$@/Makefile
+	@echo 'vpath %.c $$(top)' >>$@/Makefile
+	@echo 'vpath %.h $$(top)' >>$@/Makefile
+	@echo 'vpath %.inl $$(top)' >>$@/Makefile
+	@echo 'vpath %.py $$(top)' >>$@/Makefile
+	@echo 'vpath %.txt $$(top)' >>$@/Makefile
+	@echo 'include $$(top)Makefile' >>$@/Makefile
 	+$(MAKE) -C $@ $(makeflags)
 
 # ------------------------------------------------------------------------
