@@ -887,7 +887,7 @@ void sg_ode_de(struct SgOde *const self,
     if (*relerr < 0.0 || *abserr < 0.0 ||
         eps <= 0.0 || *iflag == 0 ||
         (*iflag != 1 && (*t != self->told || *iflag < 2 || *iflag > 5))) {
-        *iflag = 6;
+        *iflag = SG_ODE_EINVAL;
         return;
     }
 
@@ -1135,9 +1135,10 @@ int sg_ode(void *f_ctx,
            double *restrict work,
            int *restrict iwork)
 {
+    static const struct SgOde EMPTY;
     struct SgVectorDriverVt vt = SG_BASIC_VECTOR_DRIVER_VT;
     struct SimpleDerivFnCtx ctx;
-    struct SgOde self;
+    struct SgOde self = EMPTY;
     const size_t iwork_len = 5;
     const size_t work_len = 100 + 21 * neqn;
     const size_t told_index = 91;
@@ -1218,11 +1219,13 @@ int sg_ode(void *f_ctx,
     sg_ode_de(&self, wrapper, &ctx, y, t, tout,
               &relerr, &abserr, &iflag, maxnum);
 
-    pack_state(&self, work, iwork);
-
     /* 'ode' returns a signed flag depending on whether FSTRICT is enabled;
        we don't want that */
     iflag = abs(iflag);
+
+    if (iflag != SG_ODE_EINVAL) {
+        pack_state(&self, work, iwork);
+    }
 
     /* 'ode' returns 2 on success */
     if (iflag != 2) {

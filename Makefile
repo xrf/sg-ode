@@ -17,7 +17,7 @@ SHAREDFLAGS=-shared -Wl,-soname,lib$(1).so.$(2)
 SHAREDLN=ln -fs lib$(1).so.$(2).$(3).$(4) lib$(1).so.$(2) && ln -fs lib$(1).so.$(2).$(3).$(4) lib$(1).so
 
 DIFF=git --no-pager diff --exit-code --no-index
-harness=$(HARNESS) timeout 15
+harness=timeout 15 $(HARNESS)
 
 -include config.mk
 
@@ -48,7 +48,7 @@ target/build/$(libsgode): sg_ode/ode.o sg_ode/vector.o
 	$(CC) $(CFLAGS) $(LDFLAGS) $(call SHAREDFLAGS,sgode,$(major),$(minor),$(patch)) -o $@ $^ $(LDLIBS)
 	cd $(@D) && $(call SHAREDLN,sgode,$(major),$(minor),$(patch))
 
-check: target/build/arguments_test.ok target/build/jacobian_elliptic_a_test.ok target/build/jacobian_elliptic_b_test.ok target/build/stiff_test.ok
+check: target/build/arguments_test.ok target/build/jacobian_elliptic_a_test.ok target/build/jacobian_elliptic_b_test.ok target/build/harmonic_oscillator_test.ok target/build/stiff_test.ok
 
 target/build/%_test.ok: target/build/%_test tests/%$(TESTSUFFIX).txt
 	@mkdir -p $(@D)
@@ -107,7 +107,7 @@ target/clang_asan: makeflags=CC=clang CFLAGS='$(CFLAGS) -fsanitize=address' chec
 target/clang_msan: makeflags=CC=clang CFLAGS='$(CFLAGS) -fsanitize=memory' check
 target/clang_ubsan: makeflags=CC=clang CFLAGS='$(CFLAGS) -fsanitize=undefined' check
 target/dump_state: makeflags=TESTFLAGS=--dump-state TESTSUFFIX=_state check
-target/gcc_valgrind: makeflags=CC=gcc CFLAGS='$(CFLAGS) -O3' HARNESS='valgrind --error-exitcode=1 -q' check
+target/gcc_valgrind: makeflags=CC=gcc CFLAGS='$(CFLAGS) -O3' HARNESS='valgrind --error-exitcode=1 -q' TESTFLAGS=--dump-state TESTSUFFIX=_state check
 
 lints!=sed -n 's|^\(target/[^:%][^:%]*\): makeflags.*|\1|p' Makefile
 
