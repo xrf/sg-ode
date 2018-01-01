@@ -1,6 +1,6 @@
 # Maintainer: Fei Yuan <yuan@nscl.msu.edu>
 pkgname=sg-ode-git
-pkgver=r79.fe78698
+pkgver=latest
 pkgrel=1
 pkgdesc="ODE solver by Shampine and Gordon"
 arch=(i686 x86_64)
@@ -9,7 +9,7 @@ license=(LGPL)
 makedepends=(git)
 provides=(sg-ode)
 conflicts=(sg-ode)
-source=($pkgname::git://github.com/xrf/sg-ode#branch=v2)
+source=($pkgname::git://github.com/xrf/sg-ode)
 sha256sums=(SKIP)
 
 pkgver() {
