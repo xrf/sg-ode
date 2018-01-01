@@ -1,27 +1,38 @@
-# Parallelizable Shampine-Gordon ODE solver [![Build status][ci]][ca]
+# Parallelizable Shampine-Gordon ODE solver [![Build status](https://travis-ci.org/xrf/sg-ode.svg)](https://travis-ci.org/xrf/sg-ode)
 
-**Quick links:** [documentation][doc], [releases][rel].
+**Quick links:** [documentation](https://xrf.github.io/sg-ode), [releases][rel].
 
-Solves a general system of [ordinary differential equations (ODEs)][ode] using
-an [algorithm by L. F. Shampine and M. K. Gordon][sg]:
+Solves a general system of [ordinary differential equations (ODEs)](https://en.wikipedia.org/wiki/Ordinary_differential_equation) using an [algorithm by L. F. Shampine and M. K. Gordon][sg]:
 
     y′(t) = f(t, y(t))
 
-The code was originally translated from the [Netlib version][nl] with the aid of f2c.
-
-[ode]: https://en.wikipedia.org/wiki/Ordinary_differential_equation
-[nl]:  http://www.netlib.org/ode/ode.f
-[sg]:  http://books.google.com/books?id=3Yl2nQEACAAJ
+The code was originally translated from the [Netlib version](http://www.netlib.org/ode/ode.f) with the aid of [f2c](http://netlib.org/f2c/).
 
 ## Installation
 
-[Download][rel] the tarball and run:
+[Download][rel] the latest tarball and run:
 
     make PREFIX=/usr/local install
 
-Replace `/usr/local` with wherever you want it to be installed.  With the default settings, the library is installed to `/usr/local/lib/libsgode.so` and the main header file is installed to `/usr/local/include/sg_ode.h`
+Replace `/usr/local` (the default `PREFIX`) with wherever you want it to be installed.  Afterward, the library will be installed to `$PREFIX/lib/libsgode.so` and the header files will be installed to `$PREFIX/include/sg_ode/`.
 
-If you are using Arch Linux, you can use the `PKGBUILD` script instead.
+Arch Linux users can use the `PKGBUILD` script instead.
+
+## Usage
+
+To include the headers in your source code, write:
+
+~~~c
+#include <sg_ode/ode.h>
+~~~
+
+Be sure that `$PREFIX/include` is part of your header search path (`-I $PREFIX/include`).
+
+To link with the library, pass `-l sgode` and make sure `$PREFIX/lib` is part of your library search path (`-L $PREFIX/include`).
+
+## Examples
+
+The `tests/main.c` directory provides a generic test driver for integrating ODE equations using this library.  It must be linked with either `tests/harmonic_oscillator.c`, `tests/jacobian_elliptic_a.c`, or `tests/jacobian_elliptic_b.c` to create a full program.
 
 ## Parallelization support
 
@@ -50,7 +61,5 @@ The function `operate` performs a map-like (i.e. element-wise) operation over `m
       The Initial Value Problem*][sg]
     (Freeman, 1975), ISBN: 0716704617.
 
-[ca]:  https://travis-ci.org/xrf/sg-ode
-[ci]:  https://travis-ci.org/xrf/sg-ode.svg?branch=master
-[doc]: https://xrf.github.io/sg-ode/sg__ode_8h.html
 [rel]: https://github.com/xrf/sg-ode/releases
+[sg]:  http://books.google.com/books?id=3Yl2nQEACAAJ

@@ -1,7 +1,27 @@
 #ifndef G_U239L9IU4I9YYJGH4M9CD6ADMGT66
 #define G_U239L9IU4I9YYJGH4M9CD6ADMGT66
+/** @mainpage Shampine-Gordon ODE solver
+    @par
+
+    API documentation is available for the these public headers:
+
+      - <sg_ode/ode.h>
+      - <sg_ode/vector.h>
+      - <sg_ode/vector_macros.h>
+
+*/
 /** @file
     ODE solver by Shampine and Gordon.
+
+    This header provides two interfaces:
+
+      - `sg_ode` offers the simplest interface and is compatible with earlier
+        versions of this library.
+
+      - `sg_ode_try_new`, `sg_ode_de`, and `sg_ode_del` provide a more
+        flexible interface with support for custom vector drivers, necessary
+        for parallelization.
+
 */
 #include <stdbool.h>
 #include <math.h>
