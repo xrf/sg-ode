@@ -1,7 +1,0 @@
-language: c
-sudo: false
-before_script:
-- echo 'CFLAGS+=-Wall -Wconversion -Wextra -pedantic -std=c99' >config.mk
-script:
-- make
-- make check

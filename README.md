@@ -1,4 +1,4 @@
-# Parallelizable Shampine-Gordon ODE solver [![Build status](https://travis-ci.org/xrf/sg-ode.svg)](https://travis-ci.org/xrf/sg-ode)
+# Parallelizable Shampine-Gordon ODE solver [![Build status](https://github.com/xrf/sg-ode/actions/workflows/build.yml/badge.svg)](https://github.com/xrf/sg-ode/actions/workflows/build.yml)
 
 **Quick links:** [documentation](https://xrf.github.io/sg-ode), [releases][rel].
 
